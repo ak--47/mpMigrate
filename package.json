@@ -1,0 +1,12 @@
+{
+  "name": "mp-migrate",
+  "version": "1.0.0",
+  "description": "migrate mixpanel reports from one project to another",
+  "main": "index.js",
+  "scripts": {
+    "test": "test",
+	"dev": "nodemon --inspect scratch.js"
+  },
+  "author": "AK",
+  "license": "ISC"
+}
