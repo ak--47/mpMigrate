@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "test",
-	"dev": "nodemon --inspect scratch.js"
+    "dev": "nodemon --inspect scratch.js"
   },
   "author": "AK",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.27.2"
+  }
 }
