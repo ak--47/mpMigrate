@@ -1,16 +1,8 @@
 // THE GREAT MP REPORT MIGRATOR
 // yes... you can move all your dashboards + reports to a new project with ease!
 // read the docs. plz.
+
 const URLs = require('./endpoints.js')
-
-
-// const URLs = {
-// 	me: ,
-// 	allDash: ,
-// 	singleDash: ,
-// 	singleReport: 
-// }
-
 
 
 async function main(
@@ -24,7 +16,7 @@ async function main(
         project: 1234
     }) {
 
-		URLs;
+
     return 42;
 }
 
