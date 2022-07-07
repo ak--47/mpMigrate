@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
-  "scripts": {
-    "test": "test",
+  "scripts": {    
     "dev": "nodemon --inspect scratch.js"
   },
   "author": "AK",
