@@ -14,10 +14,14 @@ function getSingleReport(workSpaceId, reportId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/bookmarks/${reportId}?v=2`
 }
 
+function getSchemas(projectId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/schemas`
+}
 
 module.exports = {
 	me,
 	getAllDash,
 	getSingleDash,
-	getSingleReport
+	getSingleReport,
+	getSchemas
 }

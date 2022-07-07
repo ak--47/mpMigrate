@@ -3,6 +3,8 @@
 // read the docs. plz.
 const URLs = require('./endpoints.js');
 const fetch = require('axios').default;
+const prompt = require('prompt');
+
 
 
 async function main(
@@ -16,32 +18,53 @@ async function main(
         project: 1234
     }) {
 
-	log(`STARTING REPORT MIGRATIOR`)	
+    log(`STARTING REPORT MIGRATIOR`)
+	log(`validating service account...`, null, true)
     //validate service account & get workspace id
     let workspace = await validateServiceAccount(source);
     source.workspace = workspace
-	log(`validating service account... 👍`)
+    log(`... 👍 looks good`)
+
+    //get the events schema
+    log(`fetching schema for project: ${source.project}...`, null, true)
+    let schema = await getSchema(source)
+    log(`... 👍 found schema with ${schema.length} entries`)
 
     //get metadata for all dashboards
-	log(`querying dashboards...`)
+    log(`querying dashboards...`, null, true)
     let dashes = await getAllDash(source)
-	log(`...found ${dashes.length} dashboards 👍`)
-
-	//for each dashboard, get metadata for every report
-	log(`querying reports...`)
-	let foundReports = 0
-	for (const [index, dash] of dashes.entries()) {
-		let dashReports = await getDashReports(source, dash.id)
-		foundReports += Object.keys(dashReports).length
-		
-		//store report metadata for later
-		dashes[index].SAVED_REPORTS = dashReports;
-		
-	}
-	log(`...found ${foundReports} reports 👍`)
+    log(`... 👍 found ${dashes.length} dashboards`)
 
 
 
+    //for each dashboard, get metadata for every report
+    log(`querying reports...`, null, true)
+    let foundReports = 0
+    for (const [index, dash] of dashes.entries()) {
+        let dashReports = await getDashReports(source, dash.id)
+        foundReports += Object.keys(dashReports).length
+
+        //store report metadata for later
+        dashes[index].SAVED_REPORTS = dashReports;
+
+    }
+    log(`... 👍 found ${foundReports} reports`)
+
+	//the migration starts
+	log(`\ni will now migrate:\n
+	${schema.length} events & props metadata
+	${dashes.length} dashboards
+	${foundReports} reports
+
+from project: ${source.project} to project: ${target.project}	
+
+are you sure you want to continue? y/n
+`)
+
+// confirm with user
+// https://www.npmjs.com/package/prompt
+// prompt.start();
+// const {go} = await prompt.get(['go']);
     return 42;
 }
 
@@ -101,7 +124,7 @@ async function getAllDash(creds) {
 }
 
 async function getDashReports(creds, dashId) {
-	let { acct: username, pass: password, workspace } = creds
+    let { acct: username, pass: password, workspace } = creds
     let res = (await fetch(URLs.getSingleDash(workspace, dashId), {
         auth: { username, password }
     })).data
@@ -109,10 +132,22 @@ async function getDashReports(creds, dashId) {
     return res.results.contents.report
 }
 
-function log(message, data) {
+async function getSchema(creds) {
+    let { acct: username, pass: password, project } = creds
+    let res = (await fetch(URLs.getSchemas(project), {
+        auth: { username, password }
+    })).data
+
+    return res.results
+
+}
+
+function log(message, data, hasResponse = false) {
     if (message) {
         console.log(message);
-		console.log('\n');
+        if (!hasResponse) {
+            console.log('\n');
+        }
     }
 
     if (data) {
