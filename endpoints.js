@@ -34,7 +34,7 @@ exports.pinDash = function(workSpaceId, dashId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}/pin/`
 }
 
-exports.makeReports =  function(workSpaceId) {
+exports.makeReport =  function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/bookmarks`;
 }
 

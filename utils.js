@@ -87,7 +87,7 @@ exports.getSchema = async function (creds) {
 exports.postSchema = async function (creds, schema) {
     let { acct: username, pass: password, project } = creds
 
-    //todo support custom events + props; for now, filter them out of the schema
+    //TODO support custom events + props; for now, filter them out of the schema
     schema = schema.filter(e => !e.entityType.includes('custom'))
 
     //remove "unknown" types by iterating through properties; they are not allowed by the API
@@ -107,10 +107,164 @@ exports.postSchema = async function (creds, schema) {
         data: params
 
     }).catch((e) => {
-		console.error(`ERROR POSTING SCHEMA!`)
-		console.error(e.message)
-		process.exit(1)
+        console.error(`ERROR POSTING SCHEMA!`)
+        console.error(e.message)
+        process.exit(1)
     })
 
-	return res.data.results
+    return res.data.results
+}
+
+//TODO FOR ALL: set access permissions on saved entities
+exports.makeCohorts = async function (creds, cohorts = []) {
+    let { acct: username, pass: password, workspace } = creds
+    let results = [];
+
+    for (const cohort of cohorts) {
+        //get rid of disallowed keys
+        delete cohort.count
+        delete cohort.created_by
+        delete cohort.data_group_id
+        delete cohort.id
+        delete cohort.last_edited
+        delete cohort.last_queried
+        delete cohort.referenced_by
+        delete cohort.referenced_directly_by
+        delete cohort.active_integrations
+        delete cohort.can_update_basic
+        delete cohort.can_view
+        delete cohort.allow_staff_override
+        delete cohort.is_superadmin
+        delete cohort.can_share
+
+        let createdCohort = await fetch(URLs.makeCohorts(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: cohort
+
+        }).catch((e) => {
+            debugger;
+        });
+
+        results.push(createdCohort);
+
+    }
+
+    return results;
+}
+
+exports.makeDashes = async function (creds, dashes = []) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let results = {
+        dashes: [],
+        reports: []
+    };
+
+    for (const dash of dashes) {
+        //copy all child reports metadatas
+        let reports = [];
+        for (let reportId in dash.SAVED_REPORTS) {
+            reports.push(dash.SAVED_REPORTS[reportId])
+        }
+
+        //get rid of disallowed keys
+        delete dash.SAVED_REPORTS;
+        delete dash.id
+        delete dash.is_private
+        delete dash.creator
+        delete dash.creator_id
+        delete dash.creator_name
+        delete dash.creator_email
+        delete dash.is_restricted
+        delete dash.modified
+        delete dash.is_favorited
+        delete dash.pinned_date
+        delete dash.generation_type
+        delete dash.layout_version
+        delete dash.can_see_grid_chameleon
+        delete dash.can_update_basic
+        delete dash.can_view
+        delete dash.allow_staff_override
+        delete dash.is_superadmin
+        delete dash.can_share
+
+        //make the dashboard; get back id
+        let createdDash = await fetch(URLs.makeDash(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: dash
+
+        }).catch((e) => {
+            debugger;
+        });
+        results.dashes.push(createdDash);
+
+        //use dash id to make reports
+        const dashId = createdDash.data.results.id;
+        creds.dashId = dashId
+        const createdReports = await makeReports(creds, reports);
+        results.reports = [...results.reports, ...createdReports];
+
+    }
+
+    return results
+}
+
+
+const makeReports = async function (creds, reports = []) {
+    let { acct: username, pass: password, project, workspace, dashId } = creds
+    let results = [];
+    for (const report of reports) {
+        //TODO match cohort id on params for reports with cohorts
+
+        //change paramas we need to change
+        report.dashboard_id = dashId
+        //delete invalid params
+        delete report.id
+        delete report.project_id
+        delete report.workspace_id
+        delete report.original_type
+        delete report.include_in_dashboard
+        delete report.is_default
+        delete report.creator
+        delete report.creator_id
+        delete report.creator_name
+        delete report.creator_email
+        delete report.generation_type
+        delete report.created
+        delete report.modified
+        delete report.metadata
+        delete report.dashboard
+        delete report.is_visibility_restricted
+        delete report.is_modification_restricted
+        delete report.can_update_basic
+        delete report.can_view
+        delete report.can_share
+        delete report.allow_staff_override
+        delete report.is_superadmin
+
+        //null values get a little wonky; so delete them
+        for (let key in report) {
+            if (report[key] === null) {
+                delete report[key]
+            }
+        }
+
+        //stringify params... unsure why?
+        report.params = JSON.stringify(report.params)
+
+        let createdReport = await fetch(URLs.makeReport(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: report
+
+        }).catch((e) => {
+            //todo; figure out 500s
+            debugger;
+        });
+        results.push(createdReport);
+    }
+
+
+    return results;
 }
