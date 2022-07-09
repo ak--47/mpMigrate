@@ -5,7 +5,12 @@ exports.validateServiceAccount = async function (creds) {
     let { acct: username, pass: password, project } = creds
     let res = (await fetch(URLs.me(), {
         auth: { username, password }
-    })).data
+    }).catch((e) => {
+		debugger;
+		console.error(`ERROR VALIDATING SERVICE ACCOUNT!`)
+        console.error(e.message)
+        process.exit(1)
+	})).data
 
     //can this users access the supplied project
     if (res.results.projects[project]) {
@@ -51,6 +56,11 @@ exports.getCohorts = async function (creds) {
     let { acct: username, pass: password, workspace } = creds
     let res = (await fetch(URLs.getCohorts(workspace), {
         auth: { username, password }
+    }).catch((e) => {
+        debugger;
+		console.error(`ERROR GETTING COHORT`)
+        console.error(e.message)
+        process.exit(1)
     })).data
 
     return res.results
@@ -60,7 +70,12 @@ exports.getAllDash = async function (creds) {
     let { acct: username, pass: password, workspace } = creds
     let res = (await fetch(URLs.getAllDash(workspace), {
         auth: { username, password }
-    })).data
+    }).catch((e) => {
+		debugger;
+		console.error(`ERROR GETTING DASH`)
+        console.error(e.message)
+        process.exit(1)
+	})).data
 
     return res.results
 }
@@ -69,7 +84,12 @@ exports.getDashReports = async function (creds, dashId) {
     let { acct: username, pass: password, workspace } = creds
     let res = (await fetch(URLs.getSingleDash(workspace, dashId), {
         auth: { username, password }
-    })).data
+    }).catch((e) => {
+		debugger;
+		console.error(`ERROR GETTING REPORT`)
+        console.error(e.message)
+        process.exit(1)
+	})).data
 
     return res.results.contents.report
 }
@@ -78,7 +98,12 @@ exports.getSchema = async function (creds) {
     let { acct: username, pass: password, project } = creds
     let res = (await fetch(URLs.getSchemas(project), {
         auth: { username, password }
-    })).data
+    }).catch((e) => {
+		debugger;
+		console.error(`ERROR GETTING SCHEMA!`)
+        console.error(e.message)
+        process.exit(1)
+	})).data
 
     return res.results
 
@@ -144,6 +169,9 @@ exports.makeCohorts = async function (creds, cohorts = []) {
 
         }).catch((e) => {
             debugger;
+			console.error(`ERROR CREATING COHORT!`)
+			console.error(e.message)
+			process.exit(1)
         });
 
         results.push(createdCohort);
@@ -157,7 +185,8 @@ exports.makeDashes = async function (creds, dashes = []) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = {
         dashes: [],
-        reports: []
+        reports: [],
+        shares: [],
     };
 
     for (const dash of dashes) {
@@ -196,6 +225,9 @@ exports.makeDashes = async function (creds, dashes = []) {
 
         }).catch((e) => {
             debugger;
+			console.error(`ERROR MAKING DASH!`)
+			console.error(e.message)
+			process.exit(1)
         });
         results.dashes.push(createdDash);
 
@@ -203,10 +235,25 @@ exports.makeDashes = async function (creds, dashes = []) {
         const dashId = createdDash.data.results.id;
         creds.dashId = dashId
         const createdReports = await makeReports(creds, reports);
-        results.reports = [...results.reports, ...createdReports];
+        results.reports.push(createdReports)
 
+        //update shares
+        let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
+        let sharedDash = await fetch(URLs.shareDash(project, dashId), {
+            method: `post`,
+            auth: { username, password },
+            data: sharePayload
+        }).catch((e) => {
+            debugger;
+			console.error(`ERROR SHARING DASH!`)
+			console.error(e.message)
+			process.exit(1)
+        })
+
+        results.shares.push(sharedDash);
     }
 
+    results.reports = results.reports.flat()
     return results
 }
 
@@ -261,6 +308,9 @@ const makeReports = async function (creds, reports = []) {
         }).catch((e) => {
             //todo; figure out 500s
             debugger;
+			console.error(`ERROR CREATING REPORT!`)
+			console.error(e.message)
+			//process.exit(1)
         });
         results.push(createdReport);
     }

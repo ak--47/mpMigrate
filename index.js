@@ -56,6 +56,12 @@ async function main(
     }
     log(`... 👍 found ${foundReports} reports`)
 
+	//filter out empty dashboards
+	log(`checking for empty dashboards...`, null, true)
+	let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
+	log(`... found ${emptyDashes.length} reports ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
+	sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+
     //the migration starts
     log(`\ni will now migrate:\n
 	${sourceSchema.length} events & props metadata
@@ -88,13 +94,12 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     log(`creating ${sourceCohorts.length} cohorts...`, null, true);
     let targetCohorts = await u.makeCohorts(target, sourceCohorts);
     log(`	... 👍 created ${targetCohorts.length} cohorts`)
-
-    //TODO filter out empty dashboards?
+    
     log(`creating ${sourceDashes.length} dashboards & ${foundReports} reports...`, null, true);
-    let targetDashes = await u.makeDashes(target, sourceDashes);
-    //TODO deal with errors?
-    log(`	... 👍 created ${targetDashes.dashes.length} dashboards\n... 👍 created ${targetDashes.reports.length} reports`)
+    let targetDashes = await u.makeDashes(target, sourceDashes);    
+    log(`	... 👍 created ${targetDashes.dashes.length} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
 
+	//TODO an error handling strategy?
     return {
         source,
         target,
