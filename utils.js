@@ -6,12 +6,12 @@ exports.validateServiceAccount = async function (creds) {
     let res = (await fetch(URLs.me(), {
         auth: { username, password }
     }).catch((e) => {
-		creds;
-		debugger;
-		console.error(`ERROR VALIDATING SERVICE ACCOUNT!`)
+        creds;
+        debugger;
+        console.error(`ERROR VALIDATING SERVICE ACCOUNT!`)
         console.error(e.message)
         process.exit(1)
-	})).data
+    })).data
 
     //can this users access the supplied project
     if (res.results.projects[project]) {
@@ -59,8 +59,8 @@ exports.getCohorts = async function (creds) {
         auth: { username, password }
     }).catch((e) => {
         creds;
-		debugger;
-		console.error(`ERROR GETTING COHORT`)
+        debugger;
+        console.error(`ERROR GETTING COHORT`)
         console.error(e.message)
         process.exit(1)
     })).data
@@ -73,12 +73,12 @@ exports.getAllDash = async function (creds) {
     let res = (await fetch(URLs.getAllDash(workspace), {
         auth: { username, password }
     }).catch((e) => {
-		creds;
-		debugger;
-		console.error(`ERROR GETTING DASH`)
+        creds;
+        debugger;
+        console.error(`ERROR GETTING DASH`)
         console.error(e.message)
         process.exit(1)
-	})).data
+    })).data
 
     return res.results
 }
@@ -88,12 +88,12 @@ exports.getDashReports = async function (creds, dashId) {
     let res = (await fetch(URLs.getSingleDash(workspace, dashId), {
         auth: { username, password }
     }).catch((e) => {
-		creds;
-		debugger;
-		console.error(`ERROR GETTING REPORT`)
+        creds;
+        debugger;
+        console.error(`ERROR GETTING REPORT`)
         console.error(e.message)
         process.exit(1)
-	})).data
+    })).data
 
     return res.results.contents.report
 }
@@ -103,12 +103,12 @@ exports.getSchema = async function (creds) {
     let res = (await fetch(URLs.getSchemas(project), {
         auth: { username, password }
     }).catch((e) => {
-		creds;
-		debugger;
-		console.error(`ERROR GETTING SCHEMA!`)
+        creds;
+        debugger;
+        console.error(`ERROR GETTING SCHEMA!`)
         console.error(e.message)
         process.exit(1)
-	})).data
+    })).data
 
     return res.results
 
@@ -137,7 +137,7 @@ exports.postSchema = async function (creds, schema) {
         data: params
 
     }).catch((e) => {
-		params;
+        params;
         console.error(`ERROR POSTING SCHEMA!`)
         console.error(e.message)
         process.exit(1)
@@ -146,7 +146,6 @@ exports.postSchema = async function (creds, schema) {
     return res.data.results
 }
 
-//TODO FOR ALL: set access permissions on saved entities
 exports.makeCohorts = async function (creds, cohorts = []) {
     let { acct: username, pass: password, workspace } = creds
     let results = [];
@@ -175,10 +174,10 @@ exports.makeCohorts = async function (creds, cohorts = []) {
 
         }).catch((e) => {
             cohort;
-			debugger;
-			console.error(`ERROR CREATING COHORT!`)
-			console.error(e.message)
-			process.exit(1)
+            debugger;
+            console.error(`ERROR CREATING COHORT!`)
+            console.error(e.message)
+            return {}
         });
 
         results.push(createdCohort);
@@ -188,16 +187,19 @@ exports.makeCohorts = async function (creds, cohorts = []) {
     return results;
 }
 
+//TODO DEAL WITH CUSTOM PROPS AS FILTERS!
 exports.makeDashes = async function (creds, dashes = []) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = {
         dashes: [],
         reports: [],
         shares: [],
+        pins: []
     };
 
-    for (const dash of dashes) {
-        //copy all child reports metadatas
+    loopDash: for (const dash of dashes) {
+        let failed = false;
+		//copy all child reports metadatas
         let reports = [];
         for (let reportId in dash.SAVED_REPORTS) {
             reports.push(dash.SAVED_REPORTS[reportId])
@@ -224,6 +226,18 @@ exports.makeDashes = async function (creds, dashes = []) {
         delete dash.is_superadmin
         delete dash.can_share
 
+		//get rid of null keys
+		for (let key in dash) {
+            if (dash[key] === null) {
+                delete dash[key]
+            }
+        }
+
+		//for every dash to have a desc
+		if (!dash.description) {
+			dash.description = dash.title
+		}
+
         //make the dashboard; get back id
         let createdDash = await fetch(URLs.makeDash(workspace), {
             method: `post`,
@@ -231,14 +245,20 @@ exports.makeDashes = async function (creds, dashes = []) {
             data: dash
 
         }).catch((e) => {
+            //maybe retry without the filters?
+			failed = true
 			dash;
-			debugger;
-			console.error(`ERROR MAKING DASH!`)
-			console.error(e.message)
-			process.exit(1)
+			results;
+            debugger;
+            console.error(`ERROR MAKING DASH! ${dash.title}`)
+            console.error(e.message)
+			return {}
+
         });
         results.dashes.push(createdDash);
-
+		if (failed) {
+			continue loopDash;
+		}
         //use dash id to make reports
         const dashId = createdDash.data.results.id;
         creds.dashId = dashId
@@ -253,13 +273,24 @@ exports.makeDashes = async function (creds, dashes = []) {
             data: sharePayload
         }).catch((e) => {
             sharePayload;
-			debugger;
-			console.error(`ERROR SHARING DASH!`)
-			console.error(e.message)
-			process.exit(1)
+            debugger;
+            console.error(`ERROR SHARING DASH!`)
+            console.error(e.message)
         })
 
         results.shares.push(sharedDash);
+
+        //pin dashboards
+        let pinnedDash = await fetch(URLs.pinDash(workspace, dashId), {
+            method: `post`,
+            auth: { username, password },
+            data: {}
+        }).catch((e) => {
+            debugger;
+        })
+
+        results.pins.push(pinnedDash);
+
     }
 
     results.reports = results.reports.flat()
@@ -270,8 +301,9 @@ exports.makeDashes = async function (creds, dashes = []) {
 const makeReports = async function (creds, reports = []) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
-    for (const report of reports) {
-        //TODO match cohort id on params for reports with cohorts
+    loopReports: for (const report of reports) {
+        let failed = false;
+		//TODO match cohort id on params for reports with cohorts
 
         //put the report on the right dashboard
         report.dashboard_id = dashId
@@ -316,13 +348,18 @@ const makeReports = async function (creds, reports = []) {
 
         }).catch((e) => {
             //todo; figure out 500s
-			report;
+			failed = true;
+            report;
+			results;
             debugger;
-			console.error(`ERROR CREATING REPORT!`)
-			console.error(e.message)
-			//process.exit(1)
+            console.error(`ERROR CREATING REPORT!`)
+            console.error(e.message)
+			return {}
         });
         results.push(createdReport);
+		if (failed) {
+			continue loopReports;
+		}
     }
 
 

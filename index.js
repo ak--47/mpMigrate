@@ -33,6 +33,8 @@ async function main(
     let sourceSchema = await u.getSchema(source)
     log(`... 👍 found schema with ${sourceSchema.length} entries`)
 
+	//TODO: custom props?
+
     //get cohorts
     log(`querying cohort metadata...`, null, true)
     let sourceCohorts = await u.getCohorts(source);

@@ -86,12 +86,13 @@ for project: ${target.project}
     }
     log(`... 👍 done`)
 
+	log(`all finished!`)
 
     const everyThingTheScriptDid = {
         target,
         deletedSchema: deletedSchema.data.results,
         deletedCohorts,
-        deletedDashes
+        deletedDashboards
     };
 
     return everyThingTheScriptDid
