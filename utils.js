@@ -6,6 +6,7 @@ exports.validateServiceAccount = async function (creds) {
     let res = (await fetch(URLs.me(), {
         auth: { username, password }
     }).catch((e) => {
+		creds;
 		debugger;
 		console.error(`ERROR VALIDATING SERVICE ACCOUNT!`)
         console.error(e.message)
@@ -57,7 +58,8 @@ exports.getCohorts = async function (creds) {
     let res = (await fetch(URLs.getCohorts(workspace), {
         auth: { username, password }
     }).catch((e) => {
-        debugger;
+        creds;
+		debugger;
 		console.error(`ERROR GETTING COHORT`)
         console.error(e.message)
         process.exit(1)
@@ -71,6 +73,7 @@ exports.getAllDash = async function (creds) {
     let res = (await fetch(URLs.getAllDash(workspace), {
         auth: { username, password }
     }).catch((e) => {
+		creds;
 		debugger;
 		console.error(`ERROR GETTING DASH`)
         console.error(e.message)
@@ -85,6 +88,7 @@ exports.getDashReports = async function (creds, dashId) {
     let res = (await fetch(URLs.getSingleDash(workspace, dashId), {
         auth: { username, password }
     }).catch((e) => {
+		creds;
 		debugger;
 		console.error(`ERROR GETTING REPORT`)
         console.error(e.message)
@@ -99,6 +103,7 @@ exports.getSchema = async function (creds) {
     let res = (await fetch(URLs.getSchemas(project), {
         auth: { username, password }
     }).catch((e) => {
+		creds;
 		debugger;
 		console.error(`ERROR GETTING SCHEMA!`)
         console.error(e.message)
@@ -132,6 +137,7 @@ exports.postSchema = async function (creds, schema) {
         data: params
 
     }).catch((e) => {
+		params;
         console.error(`ERROR POSTING SCHEMA!`)
         console.error(e.message)
         process.exit(1)
@@ -168,7 +174,8 @@ exports.makeCohorts = async function (creds, cohorts = []) {
             data: cohort
 
         }).catch((e) => {
-            debugger;
+            cohort;
+			debugger;
 			console.error(`ERROR CREATING COHORT!`)
 			console.error(e.message)
 			process.exit(1)
@@ -224,7 +231,8 @@ exports.makeDashes = async function (creds, dashes = []) {
             data: dash
 
         }).catch((e) => {
-            debugger;
+			dash;
+			debugger;
 			console.error(`ERROR MAKING DASH!`)
 			console.error(e.message)
 			process.exit(1)
@@ -244,7 +252,8 @@ exports.makeDashes = async function (creds, dashes = []) {
             auth: { username, password },
             data: sharePayload
         }).catch((e) => {
-            debugger;
+            sharePayload;
+			debugger;
 			console.error(`ERROR SHARING DASH!`)
 			console.error(e.message)
 			process.exit(1)
@@ -264,9 +273,9 @@ const makeReports = async function (creds, reports = []) {
     for (const report of reports) {
         //TODO match cohort id on params for reports with cohorts
 
-        //change paramas we need to change
+        //put the report on the right dashboard
         report.dashboard_id = dashId
-        //delete invalid params
+        //get rid of disallowed keys
         delete report.id
         delete report.project_id
         delete report.workspace_id
@@ -290,14 +299,14 @@ const makeReports = async function (creds, reports = []) {
         delete report.allow_staff_override
         delete report.is_superadmin
 
-        //null values get a little wonky; so delete them
+        //null values make mixpanel unhappy; delete them too
         for (let key in report) {
             if (report[key] === null) {
                 delete report[key]
             }
         }
 
-        //stringify params... unsure why?
+        //unsure why? ... but you gotta do it.
         report.params = JSON.stringify(report.params)
 
         let createdReport = await fetch(URLs.makeReport(workspace), {
@@ -307,6 +316,7 @@ const makeReports = async function (creds, reports = []) {
 
         }).catch((e) => {
             //todo; figure out 500s
+			report;
             debugger;
 			console.error(`ERROR CREATING REPORT!`)
 			console.error(e.message)

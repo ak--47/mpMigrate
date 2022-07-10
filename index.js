@@ -59,7 +59,7 @@ async function main(
 	//filter out empty dashboards
 	log(`checking for empty dashboards...`, null, true)
 	let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
-	log(`... found ${emptyDashes.length} reports ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
+	log(`... found ${emptyDashes.length} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
 	sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
 
     //the migration starts
@@ -99,8 +99,7 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     let targetDashes = await u.makeDashes(target, sourceDashes);    
     log(`	... 👍 created ${targetDashes.dashes.length} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
 
-	//TODO an error handling strategy?
-    return {
+	const everyThingTheScriptDid = {
         source,
         target,
         sourceSchema,
@@ -112,6 +111,8 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
         targetReports: targetDashes.reports
 
     };
+	
+    return everyThingTheScriptDid
 }
 
 
