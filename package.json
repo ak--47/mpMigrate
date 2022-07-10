@@ -4,7 +4,8 @@
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "scripts": {    
-    "dev": "nodemon --inspect scratch.js"
+    "dev": "MODE=transfer nodemon --inspect scratch.js",
+	"delete": "MODE=delete nodemon --inspect scratch.js"
   },
   "author": "AK",
   "license": "ISC",

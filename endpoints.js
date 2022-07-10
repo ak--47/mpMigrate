@@ -46,3 +46,7 @@ exports.makeCohorts = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
 }
 
+exports.deleteCohorts = function(projectId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/cohorts/bulk-delete/`
+}
+
