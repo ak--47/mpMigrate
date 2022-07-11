@@ -29,7 +29,7 @@ async function main(target = {
 	log(`lookup custom events/props...`, null, true)
 	let customEvents = await u.getCustomEvents(target)
 	let customProps = await u.getCustomProps(target)
-    log(`... 👍 found ${customEvents.length} custom events + ${customProps} custom props`)
+    log(`... 👍 found ${customEvents.length} custom events + ${customProps.length} custom props`)
     
 
     //get cohorts
@@ -79,7 +79,7 @@ for project: ${target.project}
 	}
 
 	for (const custProp of customProps) {
-		await fetch(URLs.delCustProp(workspace, custProp.id), {
+		await fetch(URLs.delCustProp(project, custProp.customPropertyId), {
 			method: `delete`,
 			auth: { username, password },
 		}).catch((e) => {

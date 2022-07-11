@@ -33,7 +33,7 @@ async function main(
     let sourceSchema = await u.getSchema(source)
     log(`	... 👍 found schema with ${sourceSchema.length} entries`)
 
-	//TODO: custom events + props
+	//custom events + props
 	log(`fetching custom events for project: ${source.project}...`, null, true)
     let customEvents = await u.getCustomEvents(source)
     log(`	... 👍 found ${customEvents.length} custom events`)
@@ -102,11 +102,11 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     let targetSchema = await u.postSchema(target, sourceSchema)
     log(`	... 👍 done`)
 
-	//TODO: update reports with new entity Ids from custom events/props
+	//create custom events + props
 	log(`creating ${customEvents.length} custom events + ${customProps.length} custom props...`, null, true);
 	let targetCustEvents, targetCustProps
 	// BROKEN
-    // if (customEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, customEvents);
+    if (customEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, customEvents);
 	if (customProps.length > 0) targetCustProps = await u.makeCustomProps(target, customProps);
     log(`	... 👍 done`)
 
@@ -114,6 +114,7 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     let targetCohorts = await u.makeCohorts(target, sourceCohorts);
     log(`	... 👍 created ${targetCohorts.length} cohorts`)
     
+	//TODO: propagate new entity Ids to reports from custom events/props
     log(`creating ${sourceDashes.length} dashboards & ${foundReports} reports...`, null, true);
     let targetDashes = await u.makeDashes(target, sourceDashes);    
     log(`	... 👍 created ${targetDashes.dashes.length} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
