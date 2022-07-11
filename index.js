@@ -33,7 +33,14 @@ async function main(
     let sourceSchema = await u.getSchema(source)
     log(`... 👍 found schema with ${sourceSchema.length} entries`)
 
-	//TODO: custom props?
+	//TODO: custom events + props
+	log(`fetching custom events for project: ${source.project}...`, null, true)
+    let customEvents = await u.getCustomEvents(source)
+    log(`... 👍 found ${customEvents.length} custom events`)
+
+	log(`fetching custom props for project: ${source.project}...`, null, true)
+    let customProps = await u.getCustomProps(source)
+    log(`... 👍 found ${customProps.length} custom props`)
 
     //get cohorts
     log(`querying cohort metadata...`, null, true)
@@ -67,6 +74,8 @@ async function main(
     //the migration starts
     log(`\ni will now migrate:\n
 	${sourceSchema.length} events & props metadata
+	${customEvents.length} custom events
+	${customProps.length} custom props
 	${sourceCohorts.length} cohorts
 	${sourceDashes.length} dashboards
 	${foundReports} reports
@@ -92,6 +101,8 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     log(`uploading existing lexicon schema to new project...`, null, true);
     let targetSchema = await u.postSchema(target, sourceSchema)
     log(`	... 👍 done`)
+
+	//TODO: custom events + props; update reports with new entity Ids
 
     log(`creating ${sourceCohorts.length} cohorts...`, null, true);
     let targetCohorts = await u.makeCohorts(target, sourceCohorts);

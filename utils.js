@@ -199,7 +199,7 @@ exports.makeDashes = async function (creds, dashes = []) {
 
     loopDash: for (const dash of dashes) {
         let failed = false;
-		//copy all child reports metadatas
+        //copy all child reports metadatas
         let reports = [];
         for (let reportId in dash.SAVED_REPORTS) {
             reports.push(dash.SAVED_REPORTS[reportId])
@@ -226,17 +226,20 @@ exports.makeDashes = async function (creds, dashes = []) {
         delete dash.is_superadmin
         delete dash.can_share
 
-		//get rid of null keys
-		for (let key in dash) {
+        //get rid of null keys
+        for (let key in dash) {
             if (dash[key] === null) {
                 delete dash[key]
             }
         }
 
-		//for every dash to have a desc
-		if (!dash.description) {
-			dash.description = dash.title
-		}
+        //for every dash to have a desc
+        if (!dash.description) {
+            dash.description = dash.title
+        }
+
+        //defaultPublic
+        dash.global_access_type = "on"
 
         //make the dashboard; get back id
         let createdDash = await fetch(URLs.makeDash(workspace), {
@@ -245,20 +248,20 @@ exports.makeDashes = async function (creds, dashes = []) {
             data: dash
 
         }).catch((e) => {
-            //maybe retry without the filters?
-			failed = true
-			dash;
-			results;
+            //breaks on custom prop filters
+            failed = true
+            dash;
+            results;
             debugger;
             console.error(`ERROR MAKING DASH! ${dash.title}`)
             console.error(e.message)
-			return {}
+            return {}
 
         });
         results.dashes.push(createdDash);
-		if (failed) {
-			continue loopDash;
-		}
+        if (failed) {
+            continue loopDash;
+        }
         //use dash id to make reports
         const dashId = createdDash.data.results.id;
         creds.dashId = dashId
@@ -297,13 +300,50 @@ exports.makeDashes = async function (creds, dashes = []) {
     return results
 }
 
+exports.getCustomEvents = async function (creds) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let res = (await fetch(URLs.customEvents(workspace), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR GETTING CUSTOM EVENTS!`)
+        console.error(e.message)
+    })).data
+
+    return res.custom_events
+
+}
+exports.makeCustomEvents = async function (creds, custEvents) {
+    let { acct: username, pass: password, project, workspace } = creds
+}
+
+exports.getCustomProps = async function (creds) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let res = (await fetch(URLs.customProps(workspace), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR GETTING CUSTOM PROPS!`)
+        console.error(e.message)
+        process.exit(1)
+    })).data
+
+    return res.results
+
+}
+exports.makeCustomProps = async function (creds, custProps) {
+    let { acct: username, pass: password, project, workspace } = creds
+
+}
 
 const makeReports = async function (creds, reports = []) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
     loopReports: for (const report of reports) {
         let failed = false;
-		//TODO match cohort id on params for reports with cohorts
+        //TODO match cohort id on params for reports with cohorts
 
         //put the report on the right dashboard
         report.dashboard_id = dashId
@@ -348,18 +388,18 @@ const makeReports = async function (creds, reports = []) {
 
         }).catch((e) => {
             //todo; figure out 500s
-			failed = true;
+            failed = true;
             report;
-			results;
+            results;
             debugger;
             console.error(`ERROR CREATING REPORT!`)
             console.error(e.message)
-			return {}
+            return {}
         });
         results.push(createdReport);
-		if (failed) {
-			continue loopReports;
-		}
+        if (failed) {
+            continue loopReports;
+        }
     }
 
 

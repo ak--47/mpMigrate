@@ -25,6 +25,8 @@ async function main(target = {
     let targetSchema = await u.getSchema(target)
     log(`... 👍 found schema with ${targetSchema.length} entries`)
 
+	//TODO: custom events + props
+
     //get cohorts
     log(`querying cohort metadata...`, null, true)
     let targetCohorts = await u.getCohorts(target);

@@ -50,3 +50,11 @@ exports.deleteCohorts = function(projectId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/cohorts/bulk-delete/`
 }
 
+exports.customEvents = function(workSpaceId) {
+	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
+}
+
+exports.customProps = function(workSpaceId) {
+	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
+}
+
