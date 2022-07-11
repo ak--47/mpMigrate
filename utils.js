@@ -314,8 +314,45 @@ exports.getCustomEvents = async function (creds) {
     return res.custom_events
 
 }
+// BROKEN
 exports.makeCustomEvents = async function (creds, custEvents) {
     let { acct: username, pass: password, project, workspace } = creds
+    let results = [];
+    loopCustomEvents: for (const custEvent of custEvents) {
+        let failed = false;
+        let custPayload = {
+            name: custEvent.name,
+            alternatives: custEvent.alternatives
+        }
+        //make the dashboard; get back id
+        let createdCustEvent = await fetch(URLs.customEvents(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: custPayload
+
+        }).catch((e) => {
+            failed = true
+            custEvent;
+            debugger;
+            console.error(`ERROR MAKING DASH! ${dash.title}`)
+            console.error(e.message)
+            return {}
+
+        });
+        results.push(createdCustEvent);
+        if (failed) {
+            continue loopCustomEvents;
+        } else {
+            // //share custom event
+            // await fetch(URLs.shareCustEvent(project, createdCustEvent.id), {
+            //     method: 'post',
+            //     auth: { username, password },
+            //     data: { "id": createdCustEvent.id, "projectShares": [{ "id": project, "canEdit": true }] }
+            // })
+        }
+    }
+
+    return results
 }
 
 exports.getCustomProps = async function (creds) {
@@ -335,6 +372,72 @@ exports.getCustomProps = async function (creds) {
 }
 exports.makeCustomProps = async function (creds, custProps) {
     let { acct: username, pass: password, project, workspace } = creds
+    let results = [];
+    loopCustomProps: for (const custProp of custProps) {
+        let failed = false;
+        //get rid of disallowed keys       
+        delete custProp.user
+        delete custProp.created
+        delete custProp.customPropertyId
+        delete custProp.allow_staff_override
+        delete custProp.can_share
+        delete custProp.can_update_basic
+        delete custProp.can_view
+        delete custProp.canUpdateBasic
+        delete custProp.modified
+        delete custProp.referencedBy
+        delete custProp.referencedDirectlyBy
+        delete custProp.referencedRawEventProperties
+		delete custProp.project
+
+        //get rid of null keys
+        for (let key in custProp) {
+            if (custProp[key] === null) {
+                delete custProp[key]
+            }
+        }
+
+        //defaultPublic
+        custProp.global_access_type = "on"
+
+        //make the dashboard; get back id
+        let createdCustProp = await fetch(URLs.customProps(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: custProp
+
+        }).catch((e) => {
+            failed = true
+            custProp;
+            debugger;
+            console.error(`ERROR MAKING DASH! ${dash.title}`)
+            console.error(e.message)
+            return {}
+
+        });
+        results.push(createdCustProp.data.results);
+        if (failed) {
+            continue loopCustomProps;
+        }
+    }
+
+    return results
+}
+
+exports.getCustomProps = async function (creds) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let res = (await fetch(URLs.customProps(workspace), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR GETTING CUSTOM PROPS!`)
+        console.error(e.message)
+        process.exit(1)
+    })).data
+
+    return res.results
+
 
 }
 

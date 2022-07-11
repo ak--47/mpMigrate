@@ -26,6 +26,11 @@ async function main(target = {
     log(`... 👍 found schema with ${targetSchema.length} entries`)
 
 	//TODO: custom events + props
+	log(`lookup custom events/props...`, null, true)
+	let customEvents = await u.getCustomEvents(target)
+	let customProps = await u.getCustomProps(target)
+    log(`... 👍 found ${customEvents.length} custom events + ${customProps} custom props`)
+    
 
     //get cohorts
     log(`querying cohort metadata...`, null, true)
@@ -42,6 +47,8 @@ async function main(target = {
 	${targetSchema.length} events & props metadata
 	${targetCohorts.length} cohorts
 	${targetDashes.length} dashboards (and all child reports)
+	${customEvents.length} custom events
+	${customProps.length} customProps
 
 for project: ${target.project}	
 
@@ -59,9 +66,31 @@ for project: ${target.project}
     })
 	log(`... 👍 done`)
 
+	log(`deleting custom events + props...`, null, true);
+	for (const custEvent of customEvents) {
+		await fetch(URLs.delCustEvent(workspace), {
+			method: `delete`,
+			auth: { username, password },
+			data: {"events":[{"collectEverythingEventId":null,"customEventId":custEvent.id,"id":0}]}
+		}).catch((e) => {
+			custEvent
+			debugger;
+		})
+	}
+
+	for (const custProp of customProps) {
+		await fetch(URLs.delCustProp(workspace, custProp.id), {
+			method: `delete`,
+			auth: { username, password },
+		}).catch((e) => {
+			custProp
+			debugger;
+		})
+	}
+
 
     //delete cohorts
-	let deleteCohorts = {};
+	let deletedCohorts = [];
     if (targetCohorts.length > 0) {
         log(`deleting ${targetCohorts.length} cohorts...`, null, true)
         let cohortIds = targetCohorts.map(cohort => cohort.id);

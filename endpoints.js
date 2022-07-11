@@ -54,7 +54,19 @@ exports.customEvents = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
 }
 
+exports.delCustEvent = function(workspaceId) {
+	return `https://mixpanel.com/api/app/workspaces/${workspaceId}/data-definitions/events`
+}
+
+exports.shareCustEvent = function(projectId, custEvId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-events/${custEvId}/upsert`
+}
+
 exports.customProps = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
+}
+
+exports.delCustProp = function(projectId, custPropId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/custom_properties/${custPropId}`
 }
 

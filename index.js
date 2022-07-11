@@ -18,7 +18,7 @@ async function main(
         project: 1234
     }) {
 
-    log(`WELCOME TO THE GREAT REPORT MIGRATOR (by AK)\ni can migrate mixpanel saved entities (dashboard, reports, schemas, and cohorts) from one project to another (very quickly)`)
+    log(`WELCOME TO THE GREAT REPORT MIGRATOR (by AK)\ni can migrate mixpanel saved entities (dashboard, reports, schemas, cohorts, & custom event/props) from one project to another (very quickly)`)
     log(`validating source service account...`, null, true)
 
     //SOURCE
@@ -26,31 +26,31 @@ async function main(
     //validate service account & get workspace id
     let sourceWorkspace = await u.validateServiceAccount(source);
     source.workspace = sourceWorkspace
-    log(`... 👍 looks good`)
+    log(`	... 👍 looks good`)
 
     //get the events schema
     log(`fetching schema for project: ${source.project}...`, null, true)
     let sourceSchema = await u.getSchema(source)
-    log(`... 👍 found schema with ${sourceSchema.length} entries`)
+    log(`	... 👍 found schema with ${sourceSchema.length} entries`)
 
 	//TODO: custom events + props
 	log(`fetching custom events for project: ${source.project}...`, null, true)
     let customEvents = await u.getCustomEvents(source)
-    log(`... 👍 found ${customEvents.length} custom events`)
+    log(`	... 👍 found ${customEvents.length} custom events`)
 
 	log(`fetching custom props for project: ${source.project}...`, null, true)
     let customProps = await u.getCustomProps(source)
-    log(`... 👍 found ${customProps.length} custom props`)
+    log(`	... 👍 found ${customProps.length} custom props`)
 
     //get cohorts
     log(`querying cohort metadata...`, null, true)
     let sourceCohorts = await u.getCohorts(source);
-    log(`... 👍 ${sourceCohorts.length} cohorts`)
+    log(`	... 👍 ${sourceCohorts.length} cohorts`)
 
     //get metadata for all dashboards
     log(`querying dashboards metadata...`, null, true)
     let sourceDashes = await u.getAllDash(source)
-    log(`... 👍 found ${sourceDashes.length} dashboards`)
+    log(`	... 👍 found ${sourceDashes.length} dashboards`)
 
     //for each dashboard, get metadata for every child report
     log(`querying reports metdata...`, null, true)
@@ -63,12 +63,12 @@ async function main(
         sourceDashes[index].SAVED_REPORTS = dashReports;
 
     }
-    log(`... 👍 found ${foundReports} reports`)
+    log(`	... 👍 found ${foundReports} reports`)
 
 	//filter out empty dashboards
 	log(`checking for empty dashboards...`, null, true)
 	let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
-	log(`... found ${emptyDashes.length} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
+	log(`	... found ${emptyDashes.length} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
 	sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
 
     //the migration starts
@@ -102,7 +102,13 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     let targetSchema = await u.postSchema(target, sourceSchema)
     log(`	... 👍 done`)
 
-	//TODO: custom events + props; update reports with new entity Ids
+	//TODO: update reports with new entity Ids from custom events/props
+	log(`creating ${customEvents.length} custom events + ${customProps.length} custom props...`, null, true);
+	let targetCustEvents, targetCustProps
+	// BROKEN
+    // if (customEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, customEvents);
+	if (customProps.length > 0) targetCustProps = await u.makeCustomProps(target, customProps);
+    log(`	... 👍 done`)
 
     log(`creating ${sourceCohorts.length} cohorts...`, null, true);
     let targetCohorts = await u.makeCohorts(target, sourceCohorts);
@@ -120,8 +126,11 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
         sourceDashes,
         targetSchema,
         targetCohorts,
+		targetCustEvents,
+		targetCustProps,
         targetDashes: targetDashes.dashes,
-        targetReports: targetDashes.reports
+        targetReports: targetDashes.reports,
+		
 
     };
 	
