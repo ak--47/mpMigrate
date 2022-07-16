@@ -2,6 +2,10 @@ exports.me = function () {
     return `https://mixpanel.com/api/app/me`
 }
 
+exports.projectLink = function(project_id, workspace_id) {
+	return `https://mixpanel.com/project/${project_id}/view/${workspace_id}/app/`
+}
+
 exports.getAllDash = function (workSpaceId) {
     return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
 }

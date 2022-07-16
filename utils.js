@@ -1,5 +1,6 @@
 const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
+const FormData = require('form-data');
 
 exports.validateServiceAccount = async function (creds) {
     let { acct: username, pass: password, project } = creds
@@ -320,14 +321,22 @@ exports.makeCustomEvents = async function (creds, custEvents) {
     let results = [];
     loopCustomEvents: for (const custEvent of custEvents) {
         let failed = false;
-        let custPayload = {
-            name: custEvent.name,
-            alternatives: custEvent.alternatives
-        }
-        //make the dashboard; get back id
+
+		//custom events must be posted as forms?!?
+		//why?
+		let custPayload = new FormData();
+		custPayload.append('name', custEvent.name);
+		custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
+		let formHeaders = custPayload.getHeaders();
+		
+		
+        //get back id
         let createdCustEvent = await fetch(URLs.customEvents(workspace), {
             method: `post`,
             auth: { username, password },
+			headers: {
+				...formHeaders,
+			  },
             data: custPayload
 
         }).catch((e) => {
@@ -340,7 +349,9 @@ exports.makeCustomEvents = async function (creds, custEvents) {
 
         });
         results.push(createdCustEvent);
-        if (failed) {
+        
+		//two outcomes
+		if (failed) {
             continue loopCustomEvents;
         } else {
             // //share custom event

@@ -2,10 +2,7 @@
 // yes... you can move all your dashboards + reports to a new project with ease!
 // read the docs. plz.
 const prompt = require('prompt');
-const u = require('./utils.js')
-// const URLs = require('./endpoints.js');
-
-
+const u = require('./utils.js');
 
 async function main(
     source = {
@@ -22,7 +19,6 @@ async function main(
     log(`validating source service account...`, null, true)
 
     //SOURCE
-
     //validate service account & get workspace id
     let sourceWorkspace = await u.validateServiceAccount(source);
     source.workspace = sourceWorkspace
@@ -72,7 +68,7 @@ async function main(
 	sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
 
     //the migration starts
-    log(`\ni will now migrate:\n
+    log(`\ni will now copy:\n
 	${sourceSchema.length} events & props metadata
 	${customEvents.length} custom events
 	${customProps.length} custom props
@@ -82,7 +78,7 @@ async function main(
 
 from project: ${source.project} to project: ${target.project}	
 
-this action is IRREVERSIBLE. are you SURE you want to continue? y/n
+this will create a bunch of new reports; sharing settings will not be copied. shall we proceed? y/n
 `)
 
     // confirm with user
@@ -91,9 +87,7 @@ this action is IRREVERSIBLE. are you SURE you want to continue? y/n
     // const {go} = await prompt.get(['go']);
 
     //TARGET
-
     log(`validating target service account...`, null, true)
-    //validate service account & get workspace id
     let targetWorkspace = await u.validateServiceAccount(target);
     target.workspace = targetWorkspace
     log(`	... 👍 looks good`)
