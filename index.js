@@ -49,7 +49,7 @@ async function main(
     log(`	... 👍 found ${sourceDashes.length} dashboards`)
 
     //for each dashboard, get metadata for every child report
-    log(`querying reports metdata...`, null, true)
+    log(`querying reports metadata...`, null, true)
     let foundReports = 0
     for (const [index, dash] of sourceDashes.entries()) {
         let dashReports = await u.getDashReports(source, dash.id)
