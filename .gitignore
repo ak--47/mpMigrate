@@ -1,4 +1,7 @@
+.env
 scratch.js 
+/savedProjects/*
+!/savedProjects/.gitkeep
 
 # Logs
 logs

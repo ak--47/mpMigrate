@@ -1,8 +1,15 @@
+#! /usr/bin/env node
+
 // THE GREAT MP REPORT MIGRATOR
 // yes... you can move all your dashboards + reports to a new project with ease!
 // read the docs. plz.
+// https://github.com/ak--47/mpMigrate
+
+require('dotenv').config();
 const prompt = require('prompt');
 const u = require('./utils.js');
+const { pick } = require('underscore')
+
 
 async function main(
     source = {
@@ -18,10 +25,20 @@ async function main(
     log(`WELCOME TO THE GREAT REPORT MIGRATOR (by AK)\ni can migrate mixpanel saved entities (dashboard, reports, schemas, cohorts, & custom event/props) from one project to another (very quickly)`)
     log(`validating source service account...`, null, true)
 
+    //sweep .env to pickup MP_ keys; i guess the .env convention is to use all caps? so be it...
+    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`)
+	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`)
+    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project" }
+	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project" }
+    const envCredsSource = u.renameKeys(envVarsSource, sourceKeyNames)
+	const envCredsTarget = u.renameKeys(envVarsTarget, targetKeyNames)
+
+
+	
     //SOURCE
     //validate service account & get workspace id
     let sourceWorkspace = await u.validateServiceAccount(source);
-    source.workspace = sourceWorkspace
+    source.workspace = sourceWorkspace.id
     log(`	... 👍 looks good`)
 
     //get the events schema
@@ -29,12 +46,12 @@ async function main(
     let sourceSchema = await u.getSchema(source)
     log(`	... 👍 found schema with ${sourceSchema.length} entries`)
 
-	//custom events + props
-	log(`fetching custom events for project: ${source.project}...`, null, true)
+    //custom events + props
+    log(`fetching custom events for project: ${source.project}...`, null, true)
     let customEvents = await u.getCustomEvents(source)
     log(`	... 👍 found ${customEvents.length} custom events`)
 
-	log(`fetching custom props for project: ${source.project}...`, null, true)
+    log(`fetching custom props for project: ${source.project}...`, null, true)
     let customProps = await u.getCustomProps(source)
     log(`	... 👍 found ${customProps.length} custom props`)
 
@@ -61,11 +78,25 @@ async function main(
     }
     log(`	... 👍 found ${foundReports} reports`)
 
-	//filter out empty dashboards
-	log(`checking for empty dashboards...`, null, true)
-	let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
-	log(`	... found ${emptyDashes.length} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
-	sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+    log(`i can save a summary of all these entities (as JSON) if you wish.`)
+    prompt.start();
+    prompt.message = `should i save a copy of the project's metadata?`;
+    await prompt.get(['y/n']);
+    const shouldSaveReports = prompt.history('y/n')?.value?.toLowerCase()
+
+    if (shouldSaveReports === 'y' || shouldSaveReports === 'yes') {
+        log(`	... stashing metadata`)
+        await u.saveLocalCopy({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace })
+    } else {
+        log(`	... skipping`)
+    }
+
+
+    //filter out empty dashboards
+    log(`checking for empty dashboards...`, null, true)
+    let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
+    log(`	... found ${emptyDashes.length} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
+    sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
 
     //the migration starts
     log(`\ni will now copy:\n
@@ -96,24 +127,24 @@ this will create a bunch of new reports; sharing settings will not be copied. sh
     let targetSchema = await u.postSchema(target, sourceSchema)
     log(`	... 👍 done`)
 
-	//create custom events + props
-	log(`creating ${customEvents.length} custom events + ${customProps.length} custom props...`, null, true);
-	let targetCustEvents, targetCustProps
-	// BROKEN
+    //create custom events + props
+    log(`creating ${customEvents.length} custom events + ${customProps.length} custom props...`, null, true);
+    let targetCustEvents, targetCustProps
+    // BROKEN
     if (customEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, customEvents);
-	if (customProps.length > 0) targetCustProps = await u.makeCustomProps(target, customProps);
+    if (customProps.length > 0) targetCustProps = await u.makeCustomProps(target, customProps);
     log(`	... 👍 done`)
 
     log(`creating ${sourceCohorts.length} cohorts...`, null, true);
     let targetCohorts = await u.makeCohorts(target, sourceCohorts);
     log(`	... 👍 created ${targetCohorts.length} cohorts`)
-    
-	//TODO: propagate new entity Ids to reports from custom events/props
+
+    //TODO: propagate new entity Ids to reports from custom events/props
     log(`creating ${sourceDashes.length} dashboards & ${foundReports} reports...`, null, true);
-    let targetDashes = await u.makeDashes(target, sourceDashes);    
+    let targetDashes = await u.makeDashes(target, sourceDashes);
     log(`	... 👍 created ${targetDashes.dashes.length} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
 
-	const everyThingTheScriptDid = {
+    const everyThingTheScriptDid = {
         source,
         target,
         sourceSchema,
@@ -121,14 +152,14 @@ this will create a bunch of new reports; sharing settings will not be copied. sh
         sourceDashes,
         targetSchema,
         targetCohorts,
-		targetCustEvents,
-		targetCustProps,
+        targetCustEvents,
+        targetCustProps,
         targetDashes: targetDashes.dashes,
         targetReports: targetDashes.reports,
-		
+
 
     };
-	
+
     return everyThingTheScriptDid
 }
 

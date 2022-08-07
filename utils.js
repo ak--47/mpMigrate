@@ -1,6 +1,8 @@
 const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
 const FormData = require('form-data');
+const fs = require('fs').promises;
+const makeDir = require('fs').mkdirSync
 
 exports.validateServiceAccount = async function (creds) {
     let { acct: username, pass: password, project } = creds
@@ -51,7 +53,11 @@ exports.validateServiceAccount = async function (creds) {
         process.exit(1)
     }
 
-    return globalView[0].id;
+	//workspace metadata does not contain project name
+	globalView[0].projName = res.results.projects[project].name
+	globalView[0].projId = project
+
+    return globalView[0];
 }
 
 exports.getCohorts = async function (creds) {
@@ -322,21 +328,21 @@ exports.makeCustomEvents = async function (creds, custEvents) {
     loopCustomEvents: for (const custEvent of custEvents) {
         let failed = false;
 
-		//custom events must be posted as forms?!?
-		//why?
-		let custPayload = new FormData();
-		custPayload.append('name', custEvent.name);
-		custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
-		let formHeaders = custPayload.getHeaders();
-		
-		
+        //custom events must be posted as forms?!?
+        //why?
+        let custPayload = new FormData();
+        custPayload.append('name', custEvent.name);
+        custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
+        let formHeaders = custPayload.getHeaders();
+
+
         //get back id
         let createdCustEvent = await fetch(URLs.customEvents(workspace), {
             method: `post`,
             auth: { username, password },
-			headers: {
-				...formHeaders,
-			  },
+            headers: {
+                ...formHeaders,
+            },
             data: custPayload
 
         }).catch((e) => {
@@ -349,9 +355,9 @@ exports.makeCustomEvents = async function (creds, custEvents) {
 
         });
         results.push(createdCustEvent);
-        
-		//two outcomes
-		if (failed) {
+
+        //two outcomes
+        if (failed) {
             continue loopCustomEvents;
         } else {
             // //share custom event
@@ -399,7 +405,7 @@ exports.makeCustomProps = async function (creds, custProps) {
         delete custProp.referencedBy
         delete custProp.referencedDirectlyBy
         delete custProp.referencedRawEventProperties
-		delete custProp.project
+        delete custProp.project
 
         //get rid of null keys
         for (let key in custProp) {
@@ -450,6 +456,99 @@ exports.getCustomProps = async function (creds) {
     return res.results
 
 
+}
+
+exports.saveLocalCopy = async function (projectMetaData) {
+    const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace } = projectMetaData
+	
+	//make a folder for the data
+	try {
+		makeDir(`./savedProjects/${workspace.projName}`);
+	  } catch (err) {
+		if (err.code !== 'EEXIST') {
+		  throw err;
+		}
+	  }
+
+    const summary = makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
+    debugger;
+}
+
+//https://stackoverflow.com/a/45287523
+exports.renameKeys = function(obj, newKeys) {
+    const keyValues = Object.keys(obj).map(key => {
+        const newKey = newKeys[key] || key
+        return {
+            [newKey]: obj[key]
+        }
+    })
+    return Object.assign({}, ...keyValues)
+}
+
+
+const writeFile = async function(filename, data) {
+	  await fs.promises.writeFile(filename, data);	
+}
+
+const makeSummary = function (projectMetaData) {
+    const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
+	const title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n\n`
+	const schemaSummary = makeSchemaSummary(schema);
+	const customEventSummary = makeCustomEventSummary(customEvents);
+	const customPropSummary = makeCustomPropSummary(customProps);
+	const cohortSummary = makeCohortSummary(cohorts);
+	const dashSummary = makeDashSummary(dashes);
+	debugger;
+}
+
+const makeSchemaSummary = function(schema) {
+	const title = ``
+	const events = schema.filter(x => x.entityType === 'event')
+	const profiles = schema.filter(x => x.entityType === 'profile')
+	const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
+	const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+	return `
+\t\t\tSCHEMA:\n
+
+\tEVENTS:
+${eventSummary}
+
+\tPROFILE PROPS:
+${profileSummary}
+`
+	
+}
+
+const makeCustomEventSummary = function(customEvent) {
+	debugger;
+	return `
+	
+	
+	`.trim()
+}
+
+const makeCustomPropSummary = function(customProp) {
+	debugger;
+	return `
+	
+	
+	`.trim()
+}
+
+const makeCohortSummary = function(cohorts) {
+	debugger;
+	return `
+	
+	
+	`.trim()
+}
+
+const makeDashSummary = function(dashes) {
+	debugger;
+	return `
+	
+	
+	`.trim()
 }
 
 const makeReports = async function (creds, reports = []) {
