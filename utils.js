@@ -3,7 +3,8 @@ const fetch = require('axios').default;
 const FormData = require('form-data');
 const fs = require('fs').promises;
 const makeDir = require('fs').mkdirSync
-const { pick } = require('underscore')
+const { pick } = require('underscore');
+const dayjs = require('dayjs')
 
 exports.getEnvCreds = function () {
     //sweep .env to pickup creds
@@ -509,7 +510,8 @@ const writeFile = async function (filename, data) {
 
 const makeSummary = function (projectMetaData) {
     const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
-    const title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n\n`
+    let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
+	title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
     const schemaSummary = makeSchemaSummary(schema);
     const customEventSummary = makeCustomEventSummary(customEvents);
     const customPropSummary = makeCustomPropSummary(customProps);
