@@ -81,6 +81,14 @@ async function main(
     log(`	... 👍 found ${foundReports} reports`)
 
     log(`i can save a summary of all these entities (as JSON) if you wish.`)
+	//not used
+	const promptSchema = {
+		properties: {
+			pattern: /^(?:Yes|No|yes|no|y|n|Y|N)$/,
+			required: true,
+			message: 'please say "yes" or "no", or "y", or "n"'
+		}
+	}
     prompt.start();
     prompt.message = `should i save a copy of the project's metadata?`;
     await prompt.get(['y/n']);
@@ -126,7 +134,7 @@ from project: ${source.project} to project: ${target.project}
     prompt.stop()
 
 	log(`\nPROCEEDING WITH COPY!\n`)
-	
+
     //TARGET
     log(`validating target service account...`, null, true)
     let targetWorkspace = await u.validateServiceAccount(target);
