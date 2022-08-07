@@ -3,6 +3,23 @@ const fetch = require('axios').default;
 const FormData = require('form-data');
 const fs = require('fs').promises;
 const makeDir = require('fs').mkdirSync
+const { pick } = require('underscore')
+
+exports.getEnvCreds = function () {
+    //sweep .env to pickup creds
+    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`)
+    const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`)
+    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project" }
+    const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project" }
+    const envCredsSource = renameKeys(envVarsSource, sourceKeyNames)
+    const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames)
+
+	return {
+		envCredsSource, envCredsTarget
+	}
+
+}
+
 
 exports.validateServiceAccount = async function (creds) {
     let { acct: username, pass: password, project } = creds
@@ -53,9 +70,9 @@ exports.validateServiceAccount = async function (creds) {
         process.exit(1)
     }
 
-	//workspace metadata does not contain project name
-	globalView[0].projName = res.results.projects[project].name
-	globalView[0].projId = project
+    //workspace metadata does not contain project name
+    globalView[0].projName = res.results.projects[project].name
+    globalView[0].projId = project
 
     return globalView[0];
 }
@@ -460,22 +477,22 @@ exports.getCustomProps = async function (creds) {
 
 exports.saveLocalCopy = async function (projectMetaData) {
     const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace } = projectMetaData
-	
-	//make a folder for the data
-	try {
-		makeDir(`./savedProjects/${workspace.projName}`);
-	  } catch (err) {
-		if (err.code !== 'EEXIST') {
-		  throw err;
-		}
-	  }
+
+    //make a folder for the data
+    try {
+        makeDir(`./savedProjects/${workspace.projName}`);
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
 
     const summary = makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
     debugger;
 }
 
 //https://stackoverflow.com/a/45287523
-exports.renameKeys = function(obj, newKeys) {
+const renameKeys = function (obj, newKeys) {
     const keyValues = Object.keys(obj).map(key => {
         const newKey = newKeys[key] || key
         return {
@@ -486,29 +503,29 @@ exports.renameKeys = function(obj, newKeys) {
 }
 
 
-const writeFile = async function(filename, data) {
-	  await fs.promises.writeFile(filename, data);	
+const writeFile = async function (filename, data) {
+    await fs.promises.writeFile(filename, data);
 }
 
 const makeSummary = function (projectMetaData) {
     const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
-	const title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n\n`
-	const schemaSummary = makeSchemaSummary(schema);
-	const customEventSummary = makeCustomEventSummary(customEvents);
-	const customPropSummary = makeCustomPropSummary(customProps);
-	const cohortSummary = makeCohortSummary(cohorts);
-	const dashSummary = makeDashSummary(dashes);
-	debugger;
+    const title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n\n`
+    const schemaSummary = makeSchemaSummary(schema);
+    const customEventSummary = makeCustomEventSummary(customEvents);
+    const customPropSummary = makeCustomPropSummary(customProps);
+    const cohortSummary = makeCohortSummary(cohorts);
+    const dashSummary = makeDashSummary(dashes);
+    debugger;
 }
 
-const makeSchemaSummary = function(schema) {
-	const title = ``
-	const events = schema.filter(x => x.entityType === 'event')
-	const profiles = schema.filter(x => x.entityType === 'profile')
-	const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
-	const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
-	return `
-\t\t\tSCHEMA:\n
+const makeSchemaSummary = function (schema) {
+    const title = ``
+    const events = schema.filter(x => x.entityType === 'event')
+    const profiles = schema.filter(x => x.entityType === 'profile')
+    const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
+    const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+    return `
+SCHEMA:\n
 
 \tEVENTS:
 ${eventSummary}
@@ -516,37 +533,55 @@ ${eventSummary}
 \tPROFILE PROPS:
 ${profileSummary}
 `
-	
+
 }
 
-const makeCustomEventSummary = function(customEvent) {
-	debugger;
+const makeCustomEventSummary = function (customEvents) {
+	const summary = customEvents.map((custEvent)=>{
+		return `(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{return `${logic.event}`}).join(' | ')}`
+	}).join('\n')
+    
+    
 	return `
-	
+\t\t\tCUSTOM EVENTS:\n
+
+${summary}
 	
 	`.trim()
 }
 
-const makeCustomPropSummary = function(customProp) {
-	debugger;
-	return `
-	
+const makeCustomPropSummary = function (customProps) {
+    const summary = customProps.map((prop)=>{
+		return `(id: ${prop.id})`
+	})
+    return `
+\t\t\t CUSTOM PROPS:\n
+
+${summary}
 	
 	`.trim()
 }
 
-const makeCohortSummary = function(cohorts) {
-	debugger;
-	return `
-	
+const makeCohortSummary = function (cohorts) {
+    const summary = cohorts.map((cohort)=>{
+		return `(id: ${cohort.id})`
+	})
+    return `
+\t\t\t COHORTS
+
+${summary}
 	
 	`.trim()
 }
 
-const makeDashSummary = function(dashes) {
-	debugger;
-	return `
-	
+const makeDashSummary = function (dashes) {
+    const summary = dashes.map((dash)=>{
+		return `(id: ${dash.id})`
+	})
+    return `
+\t\t\t DASHBOARDS + REPORTS
+
+${summary}
 	
 	`.trim()
 }

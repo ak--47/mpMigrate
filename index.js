@@ -8,7 +8,7 @@
 require('dotenv').config();
 const prompt = require('prompt');
 const u = require('./utils.js');
-const { pick } = require('underscore')
+
 
 
 async function main(
@@ -23,20 +23,22 @@ async function main(
     }) {
 
     log(`WELCOME TO THE GREAT REPORT MIGRATOR (by AK)\ni can migrate mixpanel saved entities (dashboard, reports, schemas, cohorts, & custom event/props) from one project to another (very quickly)`)
-    log(`validating source service account...`, null, true)
+    const { envCredsSource, envCredsTarget } = u.getEnvCreds()
 
-    //sweep .env to pickup MP_ keys; i guess the .env convention is to use all caps? so be it...
-    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`)
-	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`)
-    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project" }
-	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project" }
-    const envCredsSource = u.renameKeys(envVarsSource, sourceKeyNames)
-	const envCredsTarget = u.renameKeys(envVarsTarget, targetKeyNames)
+    //choose creds based on .env or params
+    if (source.acct === '' && source.pass === '') {
+        source = envCredsSource
+        log(`using .env for source credentials`)
+    }
 
+    if (target.acct === '' && target.pass === '') {
+        trarget = envCredsTarget
+        log(`using .env for target credentials`)
+    }
 
-	
     //SOURCE
     //validate service account & get workspace id
+    log(`validating source service account...`, null, true)
     let sourceWorkspace = await u.validateServiceAccount(source);
     source.workspace = sourceWorkspace.id
     log(`	... 👍 looks good`)
@@ -90,8 +92,7 @@ async function main(
     } else {
         log(`	... skipping`)
     }
-
-
+    
     //filter out empty dashboards
     log(`checking for empty dashboards...`, null, true)
     let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
@@ -109,14 +110,23 @@ async function main(
 
 from project: ${source.project} to project: ${target.project}	
 
-this will create a bunch of new reports; sharing settings will not be copied. shall we proceed? y/n
 `)
 
-    // confirm with user
-    // https://www.npmjs.com/package/prompt
-    // prompt.start();
-    // const {go} = await prompt.get(['go']);
+    prompt.start();
+    prompt.message = `this will create NEW reports in the target project. `;
+    await prompt.get(['proceed? y/n?']);
+    const shouldCopyReports = prompt.history('proceed? y/n?')?.value?.toLowerCase()
 
+    if (shouldCopyReports === 'y' || shouldCopyReports === 'yes') {
+        `proceed!` //no opp
+    } else {
+        log(`	... skipping copy; quitting`)
+		process.exit(0)
+    }
+    prompt.stop()
+
+	log(`\nPROCEEDING WITH COPY!\n`)
+	
     //TARGET
     log(`validating target service account...`, null, true)
     let targetWorkspace = await u.validateServiceAccount(target);
