@@ -4,6 +4,7 @@ const FormData = require('form-data');
 const fs = require('fs').promises;
 const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
+const { omitBy, isEmpty, pickBy } = require('lodash')
 const dayjs = require('dayjs')
 
 
@@ -17,9 +18,10 @@ exports.getEnvCreds = function () {
     const envCredsSource = renameKeys(envVarsSource, sourceKeyNames)
     const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames)
 
-	return {
-		envCredsSource, envCredsTarget
-	}
+    return {
+        envCredsSource,
+        envCredsTarget
+    }
 
 }
 
@@ -283,7 +285,7 @@ exports.makeDashes = async function (creds, dashes = []) {
         delete dash.allow_staff_override
         delete dash.is_superadmin
         delete dash.can_share
-		delete dash.can_pin_dashboards
+        delete dash.can_pin_dashboards
 
         //get rid of null keys
         for (let key in dash) {
@@ -481,6 +483,33 @@ exports.saveLocalCopy = async function (projectMetaData) {
 }
 
 // LOCAL UTILS
+
+const removeNulls = function (obj) {
+	obj = omitBy(obj, isEmpty)
+    // var isArray = obj instanceof Array;
+    // if (isArray) {
+    //     if (obj.length === 0) {
+    //         delete obj
+    //     }
+    // }
+
+    // if (isObject(obj)) {
+    //     if (Object.keys(obj).length === 0) {
+    //         delete obj
+    //     }
+    // }
+
+    // for (var k in obj) {
+    //     if (obj[k] === null) isArray ? obj.splice(k, 1) : delete obj[k];
+    //     else if (typeof obj[k] == "object") removeNulls(obj[k]);
+    // }
+}
+
+function isObject(val) {
+    if (val === null) { return false; }
+    return ((typeof val === 'function') || (typeof val === 'object'));
+}
+
 const makeReports = async function (creds, reports = []) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
@@ -490,8 +519,8 @@ const makeReports = async function (creds, reports = []) {
 
         //put the report on the right dashboard
         // report.dashboard_id = dashId
-		report.global_access_type = "off"
-		
+        report.global_access_type = "off"
+
         //get rid of disallowed keys
         delete report.id
         delete report.project_id
@@ -526,15 +555,15 @@ const makeReports = async function (creds, reports = []) {
         //unsure why? ... but you gotta do it.
         report.params = JSON.stringify(report.params)
 
-		const payload = {
-			"content": {
-				"action": "create",
-				"content_type": "report",
-				"content_params": {
-					"bookmark": report
-				}
-			}
-		}
+        const payload = {
+            "content": {
+                "action": "create",
+                "content_type": "report",
+                "content_params": {
+                    "bookmark": report
+                }
+            }
+        }
 
         let createdReport = await fetch(URLs.makeReport(workspace, dashId), {
             method: `patch`,
@@ -581,12 +610,14 @@ const writeFile = async function (filename, data) {
 const makeSummary = function (projectMetaData) {
     const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
     let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
-	title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
+    title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
     const schemaSummary = makeSchemaSummary(schema);
     const customEventSummary = makeCustomEventSummary(customEvents);
     const customPropSummary = makeCustomPropSummary(customProps);
     const cohortSummary = makeCohortSummary(cohorts);
     const dashSummary = makeDashSummary(dashes);
+    const fullSummary = title + schemaSummary + customEventSummary + customPropSummary + dashSummary + cohortSummary
+    // todo write to file!
     debugger;
 }
 
@@ -594,63 +625,88 @@ const makeSchemaSummary = function (schema) {
     const title = ``
     const events = schema.filter(x => x.entityType === 'event')
     const profiles = schema.filter(x => x.entityType === 'profile')
-    const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
-    const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
-    return `
-SCHEMA:\n
-
-EVENTS:
+    const eventSummary = events.map(meta => `\t${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
+    const profileSummary = profiles.map(meta => `\t${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+    return `EVENTS:
 ${eventSummary}
 
 PROFILE PROPS:
 ${profileSummary}
-`
-
+\n\n`
 }
 
 const makeCustomEventSummary = function (customEvents) {
-	const summary = customEvents.map((custEvent)=>{
-		return `(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{return `${logic.event}`}).join(' | ')}`
-	}).join('\n')
-    
-    
-	return `
-CUSTOM EVENTS:\n
-${summary}
-	
-	`.trim()
+    const summary = customEvents.map((custEvent) => {
+        return `\t(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{
+			return `${logic.event}`}).join(' | ')}`
+    }).join('\n')
+
+
+    return `
+CUSTOM EVENTS:
+${summary}\n\n`
 }
 
 const makeCustomPropSummary = function (customProps) {
-    const summary = customProps.map((prop)=>{
-		return `(id: ${prop.id})`
-	})
-    return `
-CUSTOM PROPS:\n
-${summary}
-	
-	`.trim()
+    const summary = customProps.map((prop) => {
+        let formula = prop.displayFormula;
+        let variables = Object.entries(prop.composedProperties)
+        for (const formulae of variables) {
+            formula = formula.replace(formulae[0], `**${formulae[1].value}**`)
+        }
+        return `\t(id: ${prop.customPropertyId}) ${prop.name}\t\t${prop.description}
+${formula}\n`
+    }).join('\n')
+    return `CUSTOM PROPS:
+${summary}\n\n`
 }
 
 const makeCohortSummary = function (cohorts) {
-    const summary = cohorts.map((cohort)=>{
-		return `(id: ${cohort.id})`
-	})
-    return `
-COHORTS:\n
-${summary}
-	
-	`.trim()
+    const summary = cohorts.map((cohort) => {
+        let cohortLogic;
+        try {
+            cohortLogic = JSON.parse(JSON.stringify(cohort.groups));
+            removeNulls(cohortLogic)
+        } catch (e) {
+            cohortLogic = `could not resolve cohort operators (cohort was likely created from a report)`
+        }
+        return `\t(id: ${cohort.id}) ${cohort.name}\t\t${cohort.description} (created by: ${cohort.created_by.email})
+${JSON.stringify(cohortLogic, null, 2)}\n`
+    }).join('\n')
+    return `COHORTS:
+${summary}\n\n`
 }
 
 const makeDashSummary = function (dashes) {
-    const summary = dashes.map((dash)=>{
-		return `(id: ${dash.id})`
-	})
-    return `
-DASHBOARDS + REPORTS\n
-${summary}
-	
-	`.trim()
+    dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+    const summary = dashes.map((dash) => {
+        return `\t(id: ${dash.id}) "${dash.title}" : ${dash.description} (created by: ${dash.creator_email})
+\t\tREPORTS:
+${makeReportSummaries(dash.SAVED_REPORTS)}`
+    }).join('\n\n')
+    return `DASHBOARDS + REPORTS\n\n
+${summary}\n\n`
 }
 
+const makeReportSummaries = function (reports) {
+    let summary = ``;
+    let savedReports = [];
+    let reportIds = Object.keys(reports)
+    for (const reportId of reportIds) {
+        savedReports.push(reports[reportId])
+    }
+    for (const report of savedReports) {
+        let reportLogic;
+        try {
+            reportLogic = JSON.parse(JSON.stringify(report.params))
+            removeNulls(reportLogic)
+        } catch (e) {
+            reportLogic = `could not resolve report logic`
+        }
+        summary += `\t\t\t(id: ${report.id} ${report.type.toUpperCase()}) ${report.name} \t\t ${report.description} (created by: ${report.creator_email})\n`
+        summary += `${JSON.stringify(reportLogic, null, 2)}`
+        summary += `\n\n`
+    }
+
+    return summary
+}
