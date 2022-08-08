@@ -30,16 +30,17 @@ exports.makeDash = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
 }
 
+exports.makeReport =  function(workSpaceId, dashId) {
+	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`;
+}
+
+
 exports.shareDash = function(projectId, dashId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/dashboards/${dashId}/upsert`
 }
 
 exports.pinDash = function(workSpaceId, dashId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}/pin/`
-}
-
-exports.makeReport =  function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/bookmarks`;
 }
 
 exports.getCohorts = function(workSpaceId) {

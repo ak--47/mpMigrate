@@ -32,7 +32,7 @@ async function main(
     }
 
     if (target.acct === '' && target.pass === '') {
-        trarget = envCredsTarget
+        target = envCredsTarget
         log(`using .env for target credentials`)
     }
 
@@ -81,14 +81,14 @@ async function main(
     log(`	... 👍 found ${foundReports} reports`)
 
     log(`i can save a summary of all these entities (as JSON) if you wish.`)
-	//not used
-	const promptSchema = {
-		properties: {
-			pattern: /^(?:Yes|No|yes|no|y|n|Y|N)$/,
-			required: true,
-			message: 'please say "yes" or "no", or "y", or "n"'
-		}
-	}
+    //not used
+    const promptSchema = {
+        properties: {
+            pattern: /^(?:Yes|No|yes|no|y|n|Y|N)$/,
+            required: true,
+            message: 'please say "yes" or "no", or "y", or "n"'
+        }
+    }
     prompt.start();
     prompt.message = `should i save a copy of the project's metadata?`;
     await prompt.get(['y/n']);
@@ -100,7 +100,7 @@ async function main(
     } else {
         log(`	... skipping`)
     }
-    
+
     //filter out empty dashboards
     log(`checking for empty dashboards...`, null, true)
     let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
@@ -129,16 +129,16 @@ from project: ${source.project} to project: ${target.project}
         `proceed!` //no opp
     } else {
         log(`	... skipping copy; quitting`)
-		process.exit(0)
+        process.exit(0)
     }
     prompt.stop()
 
-	log(`\nPROCEEDING WITH COPY!\n`)
+    log(`\nPROCEEDING WITH COPY!\n`)
 
     //TARGET
     log(`validating target service account...`, null, true)
     let targetWorkspace = await u.validateServiceAccount(target);
-    target.workspace = targetWorkspace
+    target.workspace = targetWorkspace.id
     log(`	... 👍 looks good`)
 
     log(`uploading existing lexicon schema to new project...`, null, true);

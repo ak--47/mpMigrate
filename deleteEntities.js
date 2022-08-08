@@ -3,7 +3,7 @@
 const u = require('./utils.js')
 const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
-
+require('dotenv').config();
 
 
 async function main(target = {
@@ -14,33 +14,44 @@ async function main(target = {
 
     log(`👾 DELETE ALL ENTITIES 👾`)
 
+	const { envCredsTarget } = u.getEnvCreds()
+
+    //choose creds based on .env or params
+    if (target.acct === '' && target.pass === '') {
+        target = envCredsTarget
+        log(`using .env for target credentials`)
+    }
+
+    //SOURCE
     //validate service account & get workspace id
     log(`validating source service account...`, null, true)
     let targetWorkspace = await u.validateServiceAccount(target);
-    target.workspace = targetWorkspace
-    log(`... 👍 looks good`)
+    target.workspace = targetWorkspace.id
+    log(`	... 👍 looks good`)
 
     //get the events schema
     log(`fetching schema for project: ${target.project}...`, null, true)
     let targetSchema = await u.getSchema(target)
-    log(`... 👍 found schema with ${targetSchema.length} entries`)
+    log(`	... 👍 found schema with ${targetSchema.length} entries`)
 
-	//TODO: custom events + props
-	log(`lookup custom events/props...`, null, true)
-	let customEvents = await u.getCustomEvents(target)
-	let customProps = await u.getCustomProps(target)
-    log(`... 👍 found ${customEvents.length} custom events + ${customProps.length} custom props`)
-    
+    //custom events + props
+    log(`fetching custom events for project: ${target.project}...`, null, true)
+    let customEvents = await u.getCustomEvents(target)
+    log(`	... 👍 found ${customEvents.length} custom events`)
+
+    log(`fetching custom props for project: ${target.project}...`, null, true)
+    let customProps = await u.getCustomProps(target)
+    log(`	... 👍 found ${customProps.length} custom props`)
 
     //get cohorts
     log(`querying cohort metadata...`, null, true)
     let targetCohorts = await u.getCohorts(target);
-    log(`... 👍 ${targetCohorts.length} cohorts`)
+    log(`	... 👍 ${targetCohorts.length} cohorts`)
 
     //get metadata for all dashboards
     log(`querying dashboards metadata...`, null, true)
     let targetDashes = await u.getAllDash(target)
-    log(`... 👍 found ${targetDashes.length} dashboards`)
+    log(`	... 👍 found ${targetDashes.length} dashboards`)
 
     //deletion starts!
     log(`\ni will now delete:\n
@@ -57,40 +68,40 @@ for project: ${target.project}
     let { acct: username, pass: password, project, workspace } = target
 
     //delete schema
-	log(`deleting schema...`, null, true)
+    log(`deleting schema...`, null, true)
     let deletedSchema = await fetch(URLs.postSchema(project), {
         method: `delete`,
         auth: { username, password }
     }).catch((e) => {
         debugger;
     })
-	log(`... 👍 done`)
+    log(`... 👍 done`)
 
-	log(`deleting custom events + props...`, null, true);
-	for (const custEvent of customEvents) {
-		await fetch(URLs.delCustEvent(workspace), {
-			method: `delete`,
-			auth: { username, password },
-			data: {"events":[{"collectEverythingEventId":null,"customEventId":custEvent.id,"id":0}]}
-		}).catch((e) => {
-			custEvent
-			debugger;
-		})
-	}
+    log(`deleting custom events + props...`, null, true);
+    for (const custEvent of customEvents) {
+        await fetch(URLs.delCustEvent(workspace), {
+            method: `delete`,
+            auth: { username, password },
+            data: { "events": [{ "collectEverythingEventId": null, "customEventId": custEvent.id, "id": 0 }] }
+        }).catch((e) => {
+            custEvent
+            debugger;
+        })
+    }
 
-	for (const custProp of customProps) {
-		await fetch(URLs.delCustProp(project, custProp.customPropertyId), {
-			method: `delete`,
-			auth: { username, password },
-		}).catch((e) => {
-			custProp
-			debugger;
-		})
-	}
+    for (const custProp of customProps) {
+        await fetch(URLs.delCustProp(project, custProp.customPropertyId), {
+            method: `delete`,
+            auth: { username, password },
+        }).catch((e) => {
+            custProp
+            debugger;
+        })
+    }
 
 
     //delete cohorts
-	let deletedCohorts = [];
+    let deletedCohorts = [];
     if (targetCohorts.length > 0) {
         log(`deleting ${targetCohorts.length} cohorts...`, null, true)
         let cohortIds = targetCohorts.map(cohort => cohort.id);
@@ -117,7 +128,7 @@ for project: ${target.project}
     }
     log(`... 👍 done`)
 
-	log(`all finished!`)
+    log(`all finished!`)
 
     const everyThingTheScriptDid = {
         target,

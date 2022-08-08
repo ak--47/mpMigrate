@@ -6,6 +6,8 @@ const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
 const dayjs = require('dayjs')
 
+
+// AUTH
 exports.getEnvCreds = function () {
     //sweep .env to pickup creds
     const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`)
@@ -20,7 +22,6 @@ exports.getEnvCreds = function () {
 	}
 
 }
-
 
 exports.validateServiceAccount = async function (creds) {
     let { acct: username, pass: password, project } = creds
@@ -78,6 +79,7 @@ exports.validateServiceAccount = async function (creds) {
     return globalView[0];
 }
 
+// GETTERS
 exports.getCohorts = async function (creds) {
     let { acct: username, pass: password, workspace } = creds
     let res = (await fetch(URLs.getCohorts(workspace), {
@@ -139,6 +141,37 @@ exports.getSchema = async function (creds) {
 
 }
 
+exports.getCustomEvents = async function (creds) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let res = (await fetch(URLs.customEvents(workspace), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR GETTING CUSTOM EVENTS!`)
+        console.error(e.message)
+    }))?.data
+
+    return res.custom_events
+
+}
+exports.getCustomProps = async function (creds) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let res = (await fetch(URLs.customProps(workspace), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR GETTING CUSTOM PROPS!`)
+        console.error(e.message)
+        process.exit(1)
+    })).data
+
+    return res.results
+
+}
+
+// SETTERS
 exports.postSchema = async function (creds, schema) {
     let { acct: username, pass: password, project } = creds
 
@@ -171,6 +204,7 @@ exports.postSchema = async function (creds, schema) {
     return res.data.results
 }
 
+//TODO DEAL WITH CUSTOM PROPS + COHORTS AS FILTERS FOR EVERYTHINGS
 exports.makeCohorts = async function (creds, cohorts = []) {
     let { acct: username, pass: password, workspace } = creds
     let results = [];
@@ -212,7 +246,6 @@ exports.makeCohorts = async function (creds, cohorts = []) {
     return results;
 }
 
-//TODO DEAL WITH CUSTOM PROPS AS FILTERS!
 exports.makeDashes = async function (creds, dashes = []) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = {
@@ -230,7 +263,7 @@ exports.makeDashes = async function (creds, dashes = []) {
             reports.push(dash.SAVED_REPORTS[reportId])
         }
 
-        //get rid of disallowed keys
+        //get rid of disallowed keys (this is backwards; u shuld whitelist)
         delete dash.SAVED_REPORTS;
         delete dash.id
         delete dash.is_private
@@ -250,6 +283,7 @@ exports.makeDashes = async function (creds, dashes = []) {
         delete dash.allow_staff_override
         delete dash.is_superadmin
         delete dash.can_share
+		delete dash.can_pin_dashboards
 
         //get rid of null keys
         for (let key in dash) {
@@ -325,20 +359,6 @@ exports.makeDashes = async function (creds, dashes = []) {
     return results
 }
 
-exports.getCustomEvents = async function (creds) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.customEvents(workspace), {
-        auth: { username, password }
-    }).catch((e) => {
-        creds;
-        debugger;
-        console.error(`ERROR GETTING CUSTOM EVENTS!`)
-        console.error(e.message)
-    })).data
-
-    return res.custom_events
-
-}
 // BROKEN
 exports.makeCustomEvents = async function (creds, custEvents) {
     let { acct: username, pass: password, project, workspace } = creds
@@ -367,7 +387,7 @@ exports.makeCustomEvents = async function (creds, custEvents) {
             failed = true
             custEvent;
             debugger;
-            console.error(`ERROR MAKING DASH! ${dash.title}`)
+            console.error(`ERROR MAKING CUST EVENT!\n${JSON.stringify(custEvent), null, 2}`)
             console.error(e.message)
             return {}
 
@@ -390,21 +410,6 @@ exports.makeCustomEvents = async function (creds, custEvents) {
     return results
 }
 
-exports.getCustomProps = async function (creds) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.customProps(workspace), {
-        auth: { username, password }
-    }).catch((e) => {
-        creds;
-        debugger;
-        console.error(`ERROR GETTING CUSTOM PROPS!`)
-        console.error(e.message)
-        process.exit(1)
-    })).data
-
-    return res.results
-
-}
 exports.makeCustomProps = async function (creds, custProps) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = [];
@@ -445,35 +450,18 @@ exports.makeCustomProps = async function (creds, custProps) {
             failed = true
             custProp;
             debugger;
-            console.error(`ERROR MAKING DASH! ${dash.title}`)
+            console.error(`ERROR MAKING CUSTOM PROP!\n${JSON.stringify(custProp, null, 2)}`)
             console.error(e.message)
             return {}
 
         });
-        results.push(createdCustProp.data.results);
+        results.push(createdCustProp?.data?.results);
         if (failed) {
             continue loopCustomProps;
         }
     }
 
     return results
-}
-
-exports.getCustomProps = async function (creds) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.customProps(workspace), {
-        auth: { username, password }
-    }).catch((e) => {
-        creds;
-        debugger;
-        console.error(`ERROR GETTING CUSTOM PROPS!`)
-        console.error(e.message)
-        process.exit(1)
-    })).data
-
-    return res.results
-
-
 }
 
 exports.saveLocalCopy = async function (projectMetaData) {
@@ -492,111 +480,18 @@ exports.saveLocalCopy = async function (projectMetaData) {
     debugger;
 }
 
-//https://stackoverflow.com/a/45287523
-const renameKeys = function (obj, newKeys) {
-    const keyValues = Object.keys(obj).map(key => {
-        const newKey = newKeys[key] || key
-        return {
-            [newKey]: obj[key]
-        }
-    })
-    return Object.assign({}, ...keyValues)
-}
-
-
-const writeFile = async function (filename, data) {
-    await fs.promises.writeFile(filename, data);
-}
-
-const makeSummary = function (projectMetaData) {
-    const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
-    let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
-	title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
-    const schemaSummary = makeSchemaSummary(schema);
-    const customEventSummary = makeCustomEventSummary(customEvents);
-    const customPropSummary = makeCustomPropSummary(customProps);
-    const cohortSummary = makeCohortSummary(cohorts);
-    const dashSummary = makeDashSummary(dashes);
-    debugger;
-}
-
-const makeSchemaSummary = function (schema) {
-    const title = ``
-    const events = schema.filter(x => x.entityType === 'event')
-    const profiles = schema.filter(x => x.entityType === 'profile')
-    const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
-    const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
-    return `
-SCHEMA:\n
-
-\tEVENTS:
-${eventSummary}
-
-\tPROFILE PROPS:
-${profileSummary}
-`
-
-}
-
-const makeCustomEventSummary = function (customEvents) {
-	const summary = customEvents.map((custEvent)=>{
-		return `(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{return `${logic.event}`}).join(' | ')}`
-	}).join('\n')
-    
-    
-	return `
-\t\t\tCUSTOM EVENTS:\n
-
-${summary}
-	
-	`.trim()
-}
-
-const makeCustomPropSummary = function (customProps) {
-    const summary = customProps.map((prop)=>{
-		return `(id: ${prop.id})`
-	})
-    return `
-\t\t\t CUSTOM PROPS:\n
-
-${summary}
-	
-	`.trim()
-}
-
-const makeCohortSummary = function (cohorts) {
-    const summary = cohorts.map((cohort)=>{
-		return `(id: ${cohort.id})`
-	})
-    return `
-\t\t\t COHORTS
-
-${summary}
-	
-	`.trim()
-}
-
-const makeDashSummary = function (dashes) {
-    const summary = dashes.map((dash)=>{
-		return `(id: ${dash.id})`
-	})
-    return `
-\t\t\t DASHBOARDS + REPORTS
-
-${summary}
-	
-	`.trim()
-}
-
+// LOCAL UTILS
 const makeReports = async function (creds, reports = []) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
     loopReports: for (const report of reports) {
         let failed = false;
-        //TODO match cohort id on params for reports with cohorts
+        //TODO match cohort id + custom events/props on params for reports with cohorts
 
         //put the report on the right dashboard
-        report.dashboard_id = dashId
+        // report.dashboard_id = dashId
+		report.global_access_type = "off"
+		
         //get rid of disallowed keys
         delete report.id
         delete report.project_id
@@ -631,10 +526,20 @@ const makeReports = async function (creds, reports = []) {
         //unsure why? ... but you gotta do it.
         report.params = JSON.stringify(report.params)
 
-        let createdReport = await fetch(URLs.makeReport(workspace), {
-            method: `post`,
+		const payload = {
+			"content": {
+				"action": "create",
+				"content_type": "report",
+				"content_params": {
+					"bookmark": report
+				}
+			}
+		}
+
+        let createdReport = await fetch(URLs.makeReport(workspace, dashId), {
+            method: `patch`,
             auth: { username, password },
-            data: report
+            data: payload
 
         }).catch((e) => {
             //todo; figure out 500s
@@ -655,3 +560,97 @@ const makeReports = async function (creds, reports = []) {
 
     return results;
 }
+
+//https://stackoverflow.com/a/45287523
+const renameKeys = function (obj, newKeys) {
+    const keyValues = Object.keys(obj).map(key => {
+        const newKey = newKeys[key] || key
+        return {
+            [newKey]: obj[key]
+        }
+    })
+    return Object.assign({}, ...keyValues)
+}
+
+
+const writeFile = async function (filename, data) {
+    await fs.promises.writeFile(filename, data);
+}
+
+// SUMMARIES
+const makeSummary = function (projectMetaData) {
+    const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
+    let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
+	title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
+    const schemaSummary = makeSchemaSummary(schema);
+    const customEventSummary = makeCustomEventSummary(customEvents);
+    const customPropSummary = makeCustomPropSummary(customProps);
+    const cohortSummary = makeCohortSummary(cohorts);
+    const dashSummary = makeDashSummary(dashes);
+    debugger;
+}
+
+const makeSchemaSummary = function (schema) {
+    const title = ``
+    const events = schema.filter(x => x.entityType === 'event')
+    const profiles = schema.filter(x => x.entityType === 'profile')
+    const eventSummary = events.map(meta => `${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
+    const profileSummary = profiles.map(meta => `${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+    return `
+SCHEMA:\n
+
+EVENTS:
+${eventSummary}
+
+PROFILE PROPS:
+${profileSummary}
+`
+
+}
+
+const makeCustomEventSummary = function (customEvents) {
+	const summary = customEvents.map((custEvent)=>{
+		return `(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{return `${logic.event}`}).join(' | ')}`
+	}).join('\n')
+    
+    
+	return `
+CUSTOM EVENTS:\n
+${summary}
+	
+	`.trim()
+}
+
+const makeCustomPropSummary = function (customProps) {
+    const summary = customProps.map((prop)=>{
+		return `(id: ${prop.id})`
+	})
+    return `
+CUSTOM PROPS:\n
+${summary}
+	
+	`.trim()
+}
+
+const makeCohortSummary = function (cohorts) {
+    const summary = cohorts.map((cohort)=>{
+		return `(id: ${cohort.id})`
+	})
+    return `
+COHORTS:\n
+${summary}
+	
+	`.trim()
+}
+
+const makeDashSummary = function (dashes) {
+    const summary = dashes.map((dash)=>{
+		return `(id: ${dash.id})`
+	})
+    return `
+DASHBOARDS + REPORTS\n
+${summary}
+	
+	`.trim()
+}
+

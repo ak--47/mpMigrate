@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "MODE=transfer nodemon --inspect scratch.js",
-    "delete": "MODE=delete nodemon --inspect scratch.js",
+    "delete": "MODE=delete node scratch.js",
     "prune": "rm -rf ./savedProjects/*"
   },
   "author": "AK",
