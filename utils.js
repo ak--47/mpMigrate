@@ -478,36 +478,43 @@ exports.saveLocalCopy = async function (projectMetaData) {
         }
     }
 
-    const summary = makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
+    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
     debugger;
 }
 
 // LOCAL UTILS
 
 const removeNulls = function (obj) {
-	obj = omitBy(obj, isEmpty)
-    // var isArray = obj instanceof Array;
-    // if (isArray) {
-    //     if (obj.length === 0) {
-    //         delete obj
-    //     }
-    // }
+    function isObject(val) {
+        if (val === null) { return false; }
+        return ((typeof val === 'function') || (typeof val === 'object'));
+    }
 
-    // if (isObject(obj)) {
-    //     if (Object.keys(obj).length === 0) {
-    //         delete obj
-    //     }
-    // }
+    const isArray = obj instanceof Array;
 
-    // for (var k in obj) {
-    //     if (obj[k] === null) isArray ? obj.splice(k, 1) : delete obj[k];
-    //     else if (typeof obj[k] == "object") removeNulls(obj[k]);
-    // }
-}
+    for (var k in obj) {
+        // falsy values
+        if (!Boolean(obj[k])) {
+            isArray ? obj.splice(k, 1) : delete obj[k]
+        }
 
-function isObject(val) {
-    if (val === null) { return false; }
-    return ((typeof val === 'function') || (typeof val === 'object'));
+        // empty arrays
+        if (Array.isArray(obj[k]) && obj[k]?.length === 0) {
+            delete obj[k]
+        }
+
+        // empty objects
+        if (isObject(obj[k])) {
+            if (JSON.stringify(obj[k]) === '{}') {
+                delete obj[k]
+            }
+        }
+
+        // recursion
+        if (isObject(obj[k])) {
+            removeNulls(obj[k])
+        }
+    }
 }
 
 const makeReports = async function (creds, reports = []) {
@@ -603,29 +610,36 @@ const renameKeys = function (obj, newKeys) {
 
 
 const writeFile = async function (filename, data) {
-    await fs.promises.writeFile(filename, data);
+    await fs.writeFile(filename, data);
 }
 
 // SUMMARIES
-const makeSummary = function (projectMetaData) {
-    const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
-    let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
-    title += `collected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
-    const schemaSummary = makeSchemaSummary(schema);
-    const customEventSummary = makeCustomEventSummary(customEvents);
-    const customPropSummary = makeCustomPropSummary(customProps);
-    const cohortSummary = makeCohortSummary(cohorts);
-    const dashSummary = makeDashSummary(dashes);
-    const fullSummary = title + schemaSummary + customEventSummary + customPropSummary + dashSummary + cohortSummary
-    // todo write to file!
-    debugger;
+const makeSummary = async function (projectMetaData) {
+    try {
+        const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
+        let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
+        title += `\tcollected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
+        const schemaSummary = makeSchemaSummary(schema);
+        const customEventSummary = makeCustomEventSummary(customEvents);
+        const customPropSummary = makeCustomPropSummary(customProps);
+        const cohortSummary = makeCohortSummary(cohorts);
+        const dashSummary = makeDashSummary(dashes);
+        const fullSummary = title + schemaSummary + customEventSummary + customPropSummary + dashSummary + cohortSummary
+        await writeFile(`./savedProjects/${workspace.projName}/fullSummary.txt`, fullSummary);
+        // todo write to file!
+        debugger;
+        return true;
+    } catch (e) {
+        debugger;
+        return false;
+    }
 }
 
 const makeSchemaSummary = function (schema) {
     const title = ``
     const events = schema.filter(x => x.entityType === 'event')
     const profiles = schema.filter(x => x.entityType === 'profile')
-    const eventSummary = events.map(meta => `\t${meta.name}\t \t${meta.schemaJson.description}`).join('\n')
+    const eventSummary = events.map(meta => `\t${meta.name}\t\t\t${meta.schemaJson.description}`).join('\n')
     const profileSummary = profiles.map(meta => `\t${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
     return `EVENTS:
 ${eventSummary}
@@ -637,14 +651,15 @@ ${profileSummary}
 
 const makeCustomEventSummary = function (customEvents) {
     const summary = customEvents.map((custEvent) => {
-        return `\t(id: ${custEvent.id}) ${custEvent.name} = ${custEvent.alternatives.map((logic)=>{
+        return `\t${custEvent.name} (${custEvent.id}) = ${custEvent.alternatives.map((logic)=>{
 			return `${logic.event}`}).join(' | ')}`
     }).join('\n')
 
 
     return `
 CUSTOM EVENTS:
-${summary}\n\n`
+${summary}
+\n\n`
 }
 
 const makeCustomPropSummary = function (customProps) {
@@ -654,11 +669,12 @@ const makeCustomPropSummary = function (customProps) {
         for (const formulae of variables) {
             formula = formula.replace(formulae[0], `**${formulae[1].value}**`)
         }
-        return `\t(id: ${prop.customPropertyId}) ${prop.name}\t\t${prop.description}
+        return `\t${prop.name} (${prop.customPropertyId})\t\t${prop.description}
 ${formula}\n`
     }).join('\n')
     return `CUSTOM PROPS:
-${summary}\n\n`
+${summary}
+\n\n`
 }
 
 const makeCohortSummary = function (cohorts) {
@@ -670,7 +686,7 @@ const makeCohortSummary = function (cohorts) {
         } catch (e) {
             cohortLogic = `could not resolve cohort operators (cohort was likely created from a report)`
         }
-        return `\t(id: ${cohort.id}) ${cohort.name}\t\t${cohort.description} (created by: ${cohort.created_by.email})
+        return `\t${cohort.name} (${cohort.id})\t\t${cohort.description} (created by: ${cohort.created_by.email})
 ${JSON.stringify(cohortLogic, null, 2)}\n`
     }).join('\n')
     return `COHORTS:
@@ -680,12 +696,13 @@ ${summary}\n\n`
 const makeDashSummary = function (dashes) {
     dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
     const summary = dashes.map((dash) => {
-        return `\t(id: ${dash.id}) "${dash.title}" : ${dash.description} (created by: ${dash.creator_email})
-\t\tREPORTS:
+        return `\tDASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
+
 ${makeReportSummaries(dash.SAVED_REPORTS)}`
-    }).join('\n\n')
-    return `DASHBOARDS + REPORTS\n\n
-${summary}\n\n`
+    }).join('\n')
+    return `DASHBOARDS\n
+${summary}
+\n\n`
 }
 
 const makeReportSummaries = function (reports) {
@@ -698,12 +715,16 @@ const makeReportSummaries = function (reports) {
     for (const report of savedReports) {
         let reportLogic;
         try {
-            reportLogic = JSON.parse(JSON.stringify(report.params))
+			if (report.type === `insights`) reportLogic = report.params.sections
+			if (report.type === `funnels`) repoortLogic = report.params.steps
+			if (report.type === `retention`) repoortLogic = report.params
+			if (report.type === `flows`) repoortLogic = reports.params.steps
+            reportLogic = JSON.parse(JSON.stringify(reportLogic))
             removeNulls(reportLogic)
         } catch (e) {
             reportLogic = `could not resolve report logic`
         }
-        summary += `\t\t\t(id: ${report.id} ${report.type.toUpperCase()}) ${report.name} \t\t ${report.description} (created by: ${report.creator_email})\n`
+        summary += `\t\t\tREPORT: ${report.name} (${report.id} ${report.type.toUpperCase()})\n\t\t\t${report.description} (created by: ${report.creator_email})\n`
         summary += `${JSON.stringify(reportLogic, null, 2)}`
         summary += `\n\n`
     }
