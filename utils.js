@@ -11,7 +11,7 @@ const dateFormat = `YYYY-MM-DD`
 const mpImport = require('mixpanel-import')
 const prompt = require('prompt');
 
-const { omitBy, isEmpty, pickBy } = require('lodash')
+
 
 // AUTH
 exports.getEnvCreds = function () {
@@ -112,7 +112,7 @@ exports.makeProjectFolder = async function (workspace) {
 }
 
 // user prompts
-exports.userPrompt = async function (source, target) {
+exports.userPrompt = async function (source, target, shouldContinue) {
     //user input
     const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/
     const defaults = {
@@ -123,6 +123,30 @@ exports.userPrompt = async function (source, target) {
         default: 'no',
         before: function (value) { return value?.toLowerCase() }
     }
+
+    if (shouldContinue) {
+        const continueSchema = {
+            properties: {
+                shouldContinue: {
+                    description: `are you sure you want to continue?`,
+                    ...defaults
+                }
+            }
+        }
+
+        prompt.start();
+        prompt.message = ``
+        let { shouldContinue } = await prompt.get(continueSchema);
+
+        if (shouldContinue.includes('y')) {
+            return true
+        } else {
+            return false
+        }
+
+
+    }
+
     const promptSchema = {
         properties: {
             generateSummary: {
@@ -170,6 +194,8 @@ exports.userPrompt = async function (source, target) {
     } else {
         copyEntities = false
     }
+	
+	console.log(``)
 
     return {
         generateSummary,
@@ -179,6 +205,10 @@ exports.userPrompt = async function (source, target) {
     }
 
 
+
+}
+
+exports.continue = async function () {
 
 }
 

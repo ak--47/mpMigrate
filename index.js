@@ -53,7 +53,7 @@ first... i need to ask you a few questions...`)
     log(`	... 👍 looks good`)
 
     // get all events
-    log(`querying project for events`, null, true)
+    log(`querying project for events since ${source.start}`, null, true)
     let numEvents = await u.getProjCount(source, `events`);
     log(`	... 👍 found ${u.comma(numEvents)} events`)
 
@@ -99,60 +99,58 @@ first... i need to ask you a few questions...`)
     }
     log(`	... 👍 found ${u.comma(foundReports)} reports`)
 
-    log(`i can save a summary of all these entities (as JSON) if you wish.`)
-    //not used
-    // const promptSchema = {
-    //     properties: {
-    //         pattern: /^(?:Yes|No|yes|no|y|n|Y|N)$/,
-    //         required: true,
-    //         message: 'please say "yes" or "no", or "y", or "n"'
-    //     }
-    // }
-    // prompt.start();
-    // prompt.message = `should i save a copy of the project's metadata?`;
-    // await prompt.get(['y/n']);
-    // const shouldSaveReports = prompt.history('y/n')?.value?.toLowerCase()
-
-    // if (shouldSaveReports === 'y' || shouldSaveReports === 'yes') {
-    //     log(`	... stashing metadata`)
-    //     await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source })
-    // } else {
-    //     log(`	... skipping`)
-    // }
-
     //filter out empty dashboards
     log(`checking for empty dashboards...`, null, true)
     let emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
     log(`	... found ${u.comma(emptyDashes.length)} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
-    sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+    sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);    
+
+    if (generateSummary) {
+        log(`stashing entity metadata in ${dataFolder}`, null, true)
+        await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source })
+        log(`	... 👍 done`)
+    }
+
+	if (!copyEvents && !copyProfiles && !copyEntities) {
+		log(`nothing else to do... quitting`)		
+		process.exit(0)
+	}
+
+	let intentString = ``;
+
+    if (copyEvents) {
+		intentString += `${u.comma(numEvents)} events\n`
+    }
+
+    if (copyProfiles) {
+		intentString += `${u.comma(numProfiles)} user profiles\n`
+    }
+
+    if (copyEntities) {
+		intentString += `${u.comma(sourceSchema.length)} events & props schema
+${u.comma(customEvents.length)} custom events
+${u.comma(customProps.length)} custom props
+${u.comma(sourceCohorts.length)} cohorts
+${u.comma(sourceDashes.length)} dashboards
+${u.comma(foundReports)} reports`
+    }
+
+
 
     //the migration starts
     log(`\ni will now copy:\n
-	${u.comma(numEvents)} events
-	${u.comma(numProfiles)} user profiles
-	${u.comma(sourceSchema.length)} events & props schema
-	${u.comma(customEvents.length)} custom events
-	${u.comma(customProps.length)} custom props
-	${u.comma(sourceCohorts.length)} cohorts
-	${u.comma(sourceDashes.length)} dashboards
-	${u.comma(foundReports)} reports
+
+${intentString}	
 
 from project: ${source.project} to project: ${target.project}	
 
 `)
+	let shouldContinue = await u.userPrompt(null, null, true)
 
-    prompt.start();
-    prompt.message = `this will create NEW reports in the target project. `;
-    await prompt.get(['proceed? y/n?']);
-    const shouldCopyReports = prompt.history('proceed? y/n?')?.value?.toLowerCase()
-
-    if (shouldCopyReports === 'y' || shouldCopyReports === 'yes') {
-        `proceed!` //no opp
-    } else {
-        log(`	... skipping copy; quitting`)
-        process.exit(0)
-    }
-    prompt.stop()
+	if (!shouldContinue) {
+		log(`aborting...`)
+		process.exit(0)
+	}
 
     log(`\nPROCEEDING WITH COPY!\n`)
 
