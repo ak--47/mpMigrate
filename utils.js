@@ -4,11 +4,14 @@ const FormData = require('form-data');
 const fs = require('fs').promises;
 const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
-const { omitBy, isEmpty, pickBy } = require('lodash')
+
 const dayjs = require('dayjs')
 const path = require('path')
 const dateFormat = `YYYY-MM-DD`
 const mpImport = require('mixpanel-import')
+const prompt = require('prompt');
+
+const { omitBy, isEmpty, pickBy } = require('lodash')
 
 // AUTH
 exports.getEnvCreds = function () {
@@ -108,6 +111,76 @@ exports.makeProjectFolder = async function (workspace) {
     return path.resolve(folderPath)
 }
 
+// user prompts
+exports.userPrompt = async function (source, target) {
+    //user input
+    const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/
+    const defaults = {
+        pattern: yesNoRegex,
+        type: 'string',
+        required: true,
+        message: 'please say "yes" or "no", or "y", or "n"',
+        default: 'no',
+        before: function (value) { return value?.toLowerCase() }
+    }
+    const promptSchema = {
+        properties: {
+            generateSummary: {
+                description: `do you want to generate a summary of project ${source.project}'s saved entities?`,
+                ...defaults
+            },
+            copyEvents: {
+                description: `do you want to copy events from project ${source.project} to project ${target.project}?`,
+                ...defaults
+            },
+            copyProfiles: {
+                description: `do you want to copy profiles from project ${source.project} to project ${target.project}?`,
+                ...defaults
+            },
+            copyEntities: {
+                description: `do you want to copy saved entities from project ${source.project} to project ${target.project}?`,
+                ...defaults
+            }
+        }
+    }
+    prompt.start();
+    prompt.message = ``
+    let { generateSummary, copyEvents, copyProfiles, copyEntities } = await prompt.get(promptSchema);
+
+    if (generateSummary.includes('y')) {
+        generateSummary = true
+    } else {
+        generateSummary = false
+    }
+
+    if (copyEvents.includes('y')) {
+        copyEvents = true
+    } else {
+        copyEvents = false
+    }
+
+    if (copyProfiles.includes('y')) {
+        copyProfiles = true
+    } else {
+        copyProfiles = false
+    }
+
+    if (copyEntities.includes('y')) {
+        copyEntities = true
+    } else {
+        copyEntities = false
+    }
+
+    return {
+        generateSummary,
+        copyEvents,
+        copyProfiles,
+        copyEntities
+    }
+
+
+
+}
 
 // GETTERS
 exports.getCohorts = async function (creds) {
@@ -618,7 +691,164 @@ const makeReportSummaries = function (reports) {
 }
 
 // QUERY
-exports.getEventCount = async function (source) {
+exports.getProjCount = async function (source, type) {
+    const dateFormat = `YYYY-MM-DD`
+    const startDate = dayjs(source.start).format(dateFormat)
+    const endDate = dayjs().format(dateFormat);
+    let payload;
+    if (type === `events`) {
+        payload = {
+            "tracking_props": {
+                "is_main_query_for_report": true,
+                "report_name": "insights",
+                "has_unsaved_changes": true,
+                "query_reason": "qb_other_update"
+            },
+            "bookmark": {
+                "sections": {
+                    "show": [{
+                        "dataset": "$mixpanel",
+                        "value": {
+                            "name": "$all_events",
+                            "resourceType": "events"
+                        },
+                        "resourceType": "events",
+                        "profileType": null,
+                        "search": "",
+                        "dataGroupId": null,
+                        "math": "total",
+                        "perUserAggregation": null,
+                        "property": null
+                    }],
+                    "cohorts": [],
+                    "group": [],
+                    "filter": [],
+                    "formula": [],
+                    "time": [{
+                        "dateRangeType": "between",
+                        "unit": "day",
+                        "value": [startDate, endDate]
+                    }]
+                },
+                "columnWidths": {
+                    "bar": {}
+                },
+                "displayOptions": {
+                    "chartType": "bar",
+                    "plotStyle": "standard",
+                    "analysis": "linear",
+                    "value": "absolute"
+                },
+                "sorting": {
+                    "bar": {
+                        "sortBy": "column",
+                        "colSortAttrs": [{
+                            "sortBy": "value",
+                            "sortOrder": "desc"
+                        }]
+                    },
+                    "line": {
+                        "sortBy": "value",
+                        "sortOrder": "desc",
+                        "valueField": "averageValue",
+                        "colSortAttrs": []
+                    },
+                    "table": {
+                        "sortBy": "column",
+                        "colSortAttrs": [{
+                            "sortBy": "label",
+                            "sortOrder": "asc"
+                        }]
+                    },
+                    "insights-metric": {
+                        "sortBy": "value",
+                        "sortOrder": "desc",
+                        "valueField": "totalValue",
+                        "colSortAttrs": []
+                    },
+                    "pie": {
+                        "sortBy": "value",
+                        "sortOrder": "desc",
+                        "valueField": "totalValue",
+                        "colSortAttrs": []
+                    }
+                }
+            },
+            "queryLimits": {
+                "limit": 10000
+            },
+            "use_query_cache": true,
+            "use_query_sampling": false
+        }
+    } else if (type === `profiles`) {
+        payload = {
+            "tracking_props": {
+                "is_main_query_for_report": true,
+                "report_name": "insights",
+                "has_unsaved_changes": true,
+                "query_reason": "nav_from_other_report"
+            },
+            "bookmark": {
+                "sections": {
+                    "show": [{
+                        "dataset": null,
+                        "value": { "name": "$all_people", "resourceType": "people" },
+                        "resourceType": "people",
+                        "profileType": "people",
+                        "search": "",
+                        "dataGroupId": null,
+                        "math": "total",
+                        "perUserAggregation": null,
+                        "property": null
+                    }],
+                    "cohorts": [],
+                    "group": [],
+                    "filter": [],
+                    "formula": [],
+                    "time": [{ "unit": "day", "value": 30 }]
+                },
+                "columnWidths": { "bar": {} },
+                "displayOptions": { "chartType": "bar", "plotStyle": "standard", "analysis": "linear", "value": "absolute" },
+                "sorting": { "bar": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "value", "sortOrder": "desc" }] }, "line": { "sortBy": "value", "sortOrder": "desc", "valueField": "averageValue", "colSortAttrs": [] }, "table": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "label", "sortOrder": "asc" }] }, "insights-metric": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] }, "pie": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] } }
+            },
+            "queryLimits": { "limit": 3000 },
+            "use_query_cache": true,
+            "use_query_sampling": false
+        }
+    } else {
+        console.error(`only supported query types are "events" or "profiles"`)
+        process.exit(1)
+    }
+
+    const opts = {
+        method: 'POST',
+        url: `https://mixpanel.com/api/2.0/insights?project_id=${source.project}`,
+        headers: {
+            Accept: 'application/json'
+
+        },
+        auth: {
+            username: source.acct,
+            password: source.pass
+        },
+        data: payload
+    }
+
+    let resTotal;
+
+    try {
+        resTotal = await fetch(opts);
+        if (type === `events`) {
+            return resTotal.data.series["All Events - Total"].all
+        } else if (type === `profiles`) {
+            return resTotal.data.series["All User Profiles - Total"].value
+        }
+
+    } catch (e) {
+        debugger;
+    }
+
+
 
 }
 
@@ -634,9 +864,17 @@ exports.getRawProfiles = async function (source) {
 
 }
 
+exports.comma = function (x) {
+    try {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    } catch (e) {
+        return x
+    }
+}
+
 // INGESTION
 exports.sendEvents = async function (target) {
-// https://github.com/ak--47/mixpanel-import#credentials
+    // https://github.com/ak--47/mixpanel-import#credentials
 }
 
 exports.sendProfiles = async function (target) {
