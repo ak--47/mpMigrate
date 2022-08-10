@@ -6,17 +6,23 @@ const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
 const { omitBy, isEmpty, pickBy } = require('lodash')
 const dayjs = require('dayjs')
-
+const path = require('path')
+const dateFormat = `YYYY-MM-DD`
+const mpImport = require('mixpanel-import')
 
 // AUTH
 exports.getEnvCreds = function () {
     //sweep .env to pickup creds
-    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`)
+    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`)
     const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`)
-    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project" }
+    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE: "start" }
     const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project" }
     const envCredsSource = renameKeys(envVarsSource, sourceKeyNames)
     const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames)
+
+    if (dayjs(envCredsSource.start).isValid()) {
+        envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat)
+    }
 
     return {
         envCredsSource,
@@ -80,6 +86,28 @@ exports.validateServiceAccount = async function (creds) {
 
     return globalView[0];
 }
+
+exports.makeProjectFolder = async function (workspace) {
+    //make a folder for the data
+    let folderPath = `./savedProjects/${workspace.projName} (${workspace.projId})`
+    try {
+        makeDir(`./savedProjects/`);
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+    try {
+        makeDir(folderPath);
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+
+    return path.resolve(folderPath)
+}
+
 
 // GETTERS
 exports.getCohorts = async function (creds) {
@@ -361,57 +389,6 @@ exports.makeDashes = async function (creds, dashes = []) {
     return results
 }
 
-// BROKEN
-exports.makeCustomEvents = async function (creds, custEvents) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let results = [];
-    loopCustomEvents: for (const custEvent of custEvents) {
-        let failed = false;
-
-        //custom events must be posted as forms?!?
-        //why?
-        let custPayload = new FormData();
-        custPayload.append('name', custEvent.name);
-        custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
-        let formHeaders = custPayload.getHeaders();
-
-
-        //get back id
-        let createdCustEvent = await fetch(URLs.customEvents(workspace), {
-            method: `post`,
-            auth: { username, password },
-            headers: {
-                ...formHeaders,
-            },
-            data: custPayload
-
-        }).catch((e) => {
-            failed = true
-            custEvent;
-            debugger;
-            console.error(`ERROR MAKING CUST EVENT!\n${JSON.stringify(custEvent), null, 2}`)
-            console.error(e.message)
-            return {}
-
-        });
-        results.push(createdCustEvent);
-
-        //two outcomes
-        if (failed) {
-            continue loopCustomEvents;
-        } else {
-            // //share custom event
-            // await fetch(URLs.shareCustEvent(project, createdCustEvent.id), {
-            //     method: 'post',
-            //     auth: { username, password },
-            //     data: { "id": createdCustEvent.id, "projectShares": [{ "id": project, "canEdit": true }] }
-            // })
-        }
-    }
-
-    return results
-}
-
 exports.makeCustomProps = async function (creds, custProps) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = [];
@@ -466,24 +443,208 @@ exports.makeCustomProps = async function (creds, custProps) {
     return results
 }
 
-exports.saveLocalCopy = async function (projectMetaData) {
-    const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace } = projectMetaData
+// BROKEN
+exports.makeCustomEvents = async function (creds, custEvents) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let results = [];
+    loopCustomEvents: for (const custEvent of custEvents) {
+        let failed = false;
 
-    //make a folder for the data
-    try {
-        makeDir(`./savedProjects/${workspace.projName}`);
-    } catch (err) {
-        if (err.code !== 'EEXIST') {
-            throw err;
+        //custom events must be posted as forms?!?
+        //why?
+        let custPayload = new FormData();
+        custPayload.append('name', custEvent.name);
+        custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
+        let formHeaders = custPayload.getHeaders();
+
+
+        //get back id
+        let createdCustEvent = await fetch(URLs.customEvents(workspace), {
+            method: `post`,
+            auth: { username, password },
+            headers: {
+                ...formHeaders,
+            },
+            data: custPayload
+
+        }).catch((e) => {
+            failed = true
+            custEvent;
+            debugger;
+            console.error(`ERROR MAKING CUST EVENT!\n${JSON.stringify(custEvent), null, 2}`)
+            console.error(e.message)
+            return {}
+
+        });
+        results.push(createdCustEvent);
+
+        //two outcomes
+        if (failed) {
+            continue loopCustomEvents;
+        } else {
+            // //share custom event
+            // await fetch(URLs.shareCustEvent(project, createdCustEvent.id), {
+            //     method: 'post',
+            //     auth: { username, password },
+            //     data: { "id": createdCustEvent.id, "projectShares": [{ "id": project, "canEdit": true }] }
+            // })
         }
     }
 
-    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
-    debugger;
+    return results
 }
 
-// LOCAL UTILS
+exports.saveLocalSummary = async function (projectMetaData) {
+    const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source } = projectMetaData
+    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
+    const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary);
+}
 
+
+// SUMMARIES
+const makeSummary = async function (projectMetaData) {
+    try {
+        const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
+        let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
+        title += `\tcollected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
+        const schemaSummary = makeSchemaSummary(schema);
+        const customEventSummary = makeCustomEventSummary(customEvents);
+        const customPropSummary = makeCustomPropSummary(customProps);
+        const cohortSummary = makeCohortSummary(cohorts);
+        const dashSummary = makeDashSummary(dashes);
+        const fullSummary = title + schemaSummary + customEventSummary + customPropSummary + dashSummary + cohortSummary
+        return fullSummary;
+    } catch (e) {
+        debugger;
+        return false;
+    }
+}
+
+const makeSchemaSummary = function (schema) {
+    const title = ``
+    const events = schema.filter(x => x.entityType === 'event')
+    const profiles = schema.filter(x => x.entityType === 'profile')
+    const eventSummary = events.map(meta => `\t${meta.name}\t\t\t${meta.schemaJson.description}`).join('\n')
+    const profileSummary = profiles.map(meta => `\t${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+    return `EVENTS:
+${eventSummary}
+
+PROFILE PROPS:
+${profileSummary}
+\n\n`
+}
+
+const makeCustomEventSummary = function (customEvents) {
+    const summary = customEvents.map((custEvent) => {
+        return `\t${custEvent.name} (${custEvent.id}) = ${custEvent.alternatives.map((logic)=>{
+			return `${logic.event}`}).join(' | ')}`
+    }).join('\n')
+
+
+    return `
+CUSTOM EVENTS:
+${summary}
+\n\n`
+}
+
+const makeCustomPropSummary = function (customProps) {
+    const summary = customProps.map((prop) => {
+        let formula = prop.displayFormula;
+        let variables = Object.entries(prop.composedProperties)
+        for (const formulae of variables) {
+            formula = formula.replace(formulae[0], `**${formulae[1].value}**`)
+        }
+        return `\t${prop.name} (${prop.customPropertyId})\t\t${prop.description}
+${formula}\n`
+    }).join('\n')
+    return `CUSTOM PROPS:
+${summary}
+\n\n`
+}
+
+const makeCohortSummary = function (cohorts) {
+    const summary = cohorts.map((cohort) => {
+        let cohortLogic;
+        try {
+            cohortLogic = JSON.parse(JSON.stringify(cohort.groups));
+            removeNulls(cohortLogic)
+        } catch (e) {
+            cohortLogic = `could not resolve cohort operators (cohort was likely created from a report)`
+        }
+        return `\t${cohort.name} (${cohort.id})\t\t${cohort.description} (created by: ${cohort.created_by.email})
+${JSON.stringify(cohortLogic, null, 2)}\n`
+    }).join('\n')
+    return `COHORTS:
+${summary}\n\n`
+}
+
+const makeDashSummary = function (dashes) {
+    dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+    const summary = dashes.map((dash) => {
+        return `\tDASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
+
+${makeReportSummaries(dash.SAVED_REPORTS)}`
+    }).join('\n')
+    return `DASHBOARDS\n
+${summary}
+\n\n`
+}
+
+const makeReportSummaries = function (reports) {
+    let summary = ``;
+    let savedReports = [];
+    let reportIds = Object.keys(reports)
+    for (const reportId of reportIds) {
+        savedReports.push(reports[reportId])
+    }
+    for (const report of savedReports) {
+        let reportLogic;
+        try {
+            if (report.type === `insights`) reportLogic = report.params.sections
+            if (report.type === `funnels`) repoortLogic = report.params.steps
+            if (report.type === `retention`) repoortLogic = report.params
+            if (report.type === `flows`) repoortLogic = reports.params.steps
+            reportLogic = JSON.parse(JSON.stringify(reportLogic))
+            removeNulls(reportLogic)
+        } catch (e) {
+            reportLogic = `could not resolve report logic`
+        }
+        summary += `\t\t\tREPORT: ${report.name} (${report.id} ${report.type.toUpperCase()})\n\t\t\t${report.description} (created by: ${report.creator_email})\n`
+        summary += `${JSON.stringify(reportLogic, null, 2)}`
+        summary += `\n\n`
+    }
+
+    return summary
+}
+
+// QUERY
+exports.getEventCount = async function (source) {
+
+}
+
+exports.getProfileCount = async function (source) {
+
+}
+
+exports.getRawEvents = async function (source) {
+
+}
+
+exports.getRawProfiles = async function (source) {
+
+}
+
+// INGESTION
+exports.sendEvents = async function (target) {
+// https://github.com/ak--47/mixpanel-import#credentials
+}
+
+exports.sendProfiles = async function (target) {
+
+}
+
+
+// LOCAL UTILS
 const removeNulls = function (obj) {
     function isObject(val) {
         if (val === null) { return false; }
@@ -611,123 +772,4 @@ const renameKeys = function (obj, newKeys) {
 
 const writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
-}
-
-// SUMMARIES
-const makeSummary = async function (projectMetaData) {
-    try {
-        const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
-        let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
-        title += `\tcollected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
-        const schemaSummary = makeSchemaSummary(schema);
-        const customEventSummary = makeCustomEventSummary(customEvents);
-        const customPropSummary = makeCustomPropSummary(customProps);
-        const cohortSummary = makeCohortSummary(cohorts);
-        const dashSummary = makeDashSummary(dashes);
-        const fullSummary = title + schemaSummary + customEventSummary + customPropSummary + dashSummary + cohortSummary
-        await writeFile(`./savedProjects/${workspace.projName}/fullSummary.txt`, fullSummary);
-        // todo write to file!
-        debugger;
-        return true;
-    } catch (e) {
-        debugger;
-        return false;
-    }
-}
-
-const makeSchemaSummary = function (schema) {
-    const title = ``
-    const events = schema.filter(x => x.entityType === 'event')
-    const profiles = schema.filter(x => x.entityType === 'profile')
-    const eventSummary = events.map(meta => `\t${meta.name}\t\t\t${meta.schemaJson.description}`).join('\n')
-    const profileSummary = profiles.map(meta => `\t${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
-    return `EVENTS:
-${eventSummary}
-
-PROFILE PROPS:
-${profileSummary}
-\n\n`
-}
-
-const makeCustomEventSummary = function (customEvents) {
-    const summary = customEvents.map((custEvent) => {
-        return `\t${custEvent.name} (${custEvent.id}) = ${custEvent.alternatives.map((logic)=>{
-			return `${logic.event}`}).join(' | ')}`
-    }).join('\n')
-
-
-    return `
-CUSTOM EVENTS:
-${summary}
-\n\n`
-}
-
-const makeCustomPropSummary = function (customProps) {
-    const summary = customProps.map((prop) => {
-        let formula = prop.displayFormula;
-        let variables = Object.entries(prop.composedProperties)
-        for (const formulae of variables) {
-            formula = formula.replace(formulae[0], `**${formulae[1].value}**`)
-        }
-        return `\t${prop.name} (${prop.customPropertyId})\t\t${prop.description}
-${formula}\n`
-    }).join('\n')
-    return `CUSTOM PROPS:
-${summary}
-\n\n`
-}
-
-const makeCohortSummary = function (cohorts) {
-    const summary = cohorts.map((cohort) => {
-        let cohortLogic;
-        try {
-            cohortLogic = JSON.parse(JSON.stringify(cohort.groups));
-            removeNulls(cohortLogic)
-        } catch (e) {
-            cohortLogic = `could not resolve cohort operators (cohort was likely created from a report)`
-        }
-        return `\t${cohort.name} (${cohort.id})\t\t${cohort.description} (created by: ${cohort.created_by.email})
-${JSON.stringify(cohortLogic, null, 2)}\n`
-    }).join('\n')
-    return `COHORTS:
-${summary}\n\n`
-}
-
-const makeDashSummary = function (dashes) {
-    dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
-    const summary = dashes.map((dash) => {
-        return `\tDASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
-
-${makeReportSummaries(dash.SAVED_REPORTS)}`
-    }).join('\n')
-    return `DASHBOARDS\n
-${summary}
-\n\n`
-}
-
-const makeReportSummaries = function (reports) {
-    let summary = ``;
-    let savedReports = [];
-    let reportIds = Object.keys(reports)
-    for (const reportId of reportIds) {
-        savedReports.push(reports[reportId])
-    }
-    for (const report of savedReports) {
-        let reportLogic;
-        try {
-			if (report.type === `insights`) reportLogic = report.params.sections
-			if (report.type === `funnels`) repoortLogic = report.params.steps
-			if (report.type === `retention`) repoortLogic = report.params
-			if (report.type === `flows`) repoortLogic = reports.params.steps
-            reportLogic = JSON.parse(JSON.stringify(reportLogic))
-            removeNulls(reportLogic)
-        } catch (e) {
-            reportLogic = `could not resolve report logic`
-        }
-        summary += `\t\t\tREPORT: ${report.name} (${report.id} ${report.type.toUpperCase()})\n\t\t\t${report.description} (created by: ${report.creator_email})\n`
-        summary += `${JSON.stringify(reportLogic, null, 2)}`
-        summary += `\n\n`
-    }
-
-    return summary
 }

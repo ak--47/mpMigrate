@@ -22,7 +22,10 @@ async function main(
         project: 1234
     }) {
 
-    log(`WELCOME TO THE GREAT REPORT MIGRATOR (by AK)\ni can migrate mixpanel saved entities (dashboard, reports, schemas, cohorts, & custom event/props) from one project to another (very quickly)`)
+    log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
+					(by AK)
+
+this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`)
     const { envCredsSource, envCredsTarget } = u.getEnvCreds()
 
     //choose creds based on .env or params
@@ -41,7 +44,21 @@ async function main(
     log(`validating source service account...`, null, true)
     let sourceWorkspace = await u.validateServiceAccount(source);
     source.workspace = sourceWorkspace.id
+	let dataFolder = await u.makeProjectFolder(sourceWorkspace)
+	source.localPath = dataFolder
     log(`	... 👍 looks good`)
+
+	// get all events
+	log(`querying project for events`, null, true)
+	log(`	... 👍 found XXX events`)
+
+	// get all users
+	log(`querying project for users`, null, true)
+	log(`	... 👍 found XXX users`)
+
+	// get all groups
+	log(`querying project for users`, null, true)
+	log(`	... 👍 found XXX groups`)
 
     //get the events schema
     log(`fetching schema for project: ${source.project}...`, null, true)
@@ -96,7 +113,7 @@ async function main(
 
     if (shouldSaveReports === 'y' || shouldSaveReports === 'yes') {
         log(`	... stashing metadata`)
-        await u.saveLocalCopy({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace })
+        await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source })
     } else {
         log(`	... skipping`)
     }
