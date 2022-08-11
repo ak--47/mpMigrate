@@ -374,7 +374,7 @@ exports.postSchema = async function (creds, schema) {
 }
 
 //TODO DEAL WITH CUSTOM PROPS + COHORTS AS FILTERS FOR EVERYTHINGS
-exports.makeCohorts = async function (creds, cohorts = []) {
+exports.makeCohorts = async function (creds, cohorts = [], targetCustEvents = [], targetCustProps = []) {
     let { acct: username, pass: password, workspace } = creds
     let results = [];
 
@@ -415,7 +415,7 @@ exports.makeCohorts = async function (creds, cohorts = []) {
     return results;
 }
 
-exports.makeDashes = async function (creds, dashes = []) {
+exports.makeDashes = async function (creds, dashes = [], targetCustEvents = [], targetCustProps = []) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = {
         dashes: [],
@@ -493,7 +493,7 @@ exports.makeDashes = async function (creds, dashes = []) {
         //use dash id to make reports
         const dashId = createdDash.data.results.id;
         creds.dashId = dashId
-        const createdReports = await makeReports(creds, reports);
+        const createdReports = await makeReports(creds, reports, targetCustEvents, targetCustProps);
         results.reports.push(createdReports)
 
         //update shares
@@ -634,8 +634,8 @@ exports.makeCustomEvents = async function (creds, custEvents) {
 }
 
 exports.saveLocalSummary = async function (projectMetaData) {
-    const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source } = projectMetaData
-    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace });
+    const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData
+    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
     const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary)
     const writeSchema = await writeFile(path.resolve(`${source.localPath}/schema.json`), json(schema))
     const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/customEvents.json`), json(customEvents))
@@ -648,9 +648,10 @@ exports.saveLocalSummary = async function (projectMetaData) {
 // SUMMARIES
 const makeSummary = async function (projectMetaData) {
     try {
-        const { schema, customEvents, customProps, cohorts, dashes, workspace } = projectMetaData
+        const { schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles } = projectMetaData
         let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
         title += `\tcollected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
+		title += `EVENTS: ${exports.comma(numEvents)}\nPROFILES: ${exports.comma(numProfiles)}\n\n`
         const schemaSummary = makeSchemaSummary(schema);
         const customEventSummary = makeCustomEventSummary(customEvents);
         const customPropSummary = makeCustomPropSummary(customProps);
@@ -668,8 +669,8 @@ const makeSchemaSummary = function (schema) {
     const title = ``
     const events = schema.filter(x => x.entityType === 'event')
     const profiles = schema.filter(x => x.entityType === 'profile')
-    const eventSummary = events.map(meta => `\t${meta.name}\t\t\t${meta.schemaJson.description}`).join('\n')
-    const profileSummary = profiles.map(meta => `\t${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
+    const eventSummary = events.map(meta => `\t• ${meta.name}\t\t\t${meta.schemaJson.description}`).join('\n')
+    const profileSummary = profiles.map(meta => `\t• ${Object.keys(meta.schemaJson.properties).join(', ')}`).join(', ')
     return `EVENTS:
 ${eventSummary}
 
@@ -680,7 +681,7 @@ ${profileSummary}
 
 const makeCustomEventSummary = function (customEvents) {
     const summary = customEvents.map((custEvent) => {
-        return `\t${custEvent.name} (${custEvent.id}) = ${custEvent.alternatives.map((logic)=>{
+        return `\t• ${custEvent.name} (${custEvent.id}) = ${custEvent.alternatives.map((logic)=>{
 			return `${logic.event}`}).join(' | ')}`
     }).join('\n')
 
@@ -698,7 +699,7 @@ const makeCustomPropSummary = function (customProps) {
         for (const formulae of variables) {
             formula = formula.replace(formulae[0], `**${formulae[1].value}**`)
         }
-        return `\t${prop.name} (${prop.customPropertyId})\t\t${prop.description}
+        return `\t• ${prop.name} (${prop.customPropertyId})\t\t${prop.description}
 ${formula}\n`
     }).join('\n')
     return `CUSTOM PROPS:
@@ -715,7 +716,7 @@ const makeCohortSummary = function (cohorts) {
         } catch (e) {
             cohortLogic = `could not resolve cohort operators (cohort was likely created from a report)`
         }
-        return `\t${cohort.name} (${cohort.id})\t\t${cohort.description} (created by: ${cohort.created_by.email})
+        return `\t• ${cohort.name} (${cohort.id})\t\t${cohort.description} (created by: ${cohort.created_by.email})
 ${JSON.stringify(cohortLogic, null, 2)}\n`
     }).join('\n')
     return `COHORTS:
@@ -725,7 +726,7 @@ ${summary}\n\n`
 const makeDashSummary = function (dashes) {
     dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
     const summary = dashes.map((dash) => {
-        return `\tDASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
+        return `\t• DASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
 
 ${makeReportSummaries(dash.SAVED_REPORTS)}`
     }).join('\n')
@@ -745,15 +746,15 @@ const makeReportSummaries = function (reports) {
         let reportLogic;
         try {
             if (report.type === `insights`) reportLogic = report.params.sections
-            if (report.type === `funnels`) repoortLogic = report.params.steps
-            if (report.type === `retention`) repoortLogic = report.params
-            if (report.type === `flows`) repoortLogic = reports.params.steps
-            reportLogic = JSON.parse(JSON.stringify(reportLogic))
+            if (report.type === `funnels`) reportLogic = report.params.steps
+            if (report.type === `retention`) reportLogic = report.params
+            if (report.type === `flows`) reportLogic = report.params.steps
+            reportLogic = clone(reportLogic)
             removeNulls(reportLogic)
         } catch (e) {
             reportLogic = `could not resolve report logic`
         }
-        summary += `\t\t\tREPORT: ${report.name} (${report.id} ${report.type.toUpperCase()})\n\t\t\t${report.description} (created by: ${report.creator_email})\n`
+        summary += `\t\t\t→ REPORT: ${report.name} (${report.id} ${report.type.toUpperCase()})\n\t\t\t${report.description} (created by: ${report.creator_email})\n`
         summary += `${JSON.stringify(reportLogic, null, 2)}`
         summary += `\n\n`
     }
@@ -932,7 +933,8 @@ exports.exportAllEvents = async function (source) {
     const startDate = dayjs(source.start).format(dateFormat)
     const endDate = dayjs().format(dateFormat);
     const url = URLs.dataExport(startDate, endDate)
-    const writer = createWriteStream(path.resolve(`${source.localPath}/exports/events.json`));
+	const file = path.resolve(`${source.localPath}/exports/events.ndjson`)
+    const writer = createWriteStream(file);
     const auth = Buffer.from(source.secret + '::').toString('base64')
     const response = await fetch({
         method: 'GET',
@@ -945,6 +947,7 @@ exports.exportAllEvents = async function (source) {
 
     response.data.pipe(writer);
 
+	// TODO: why can't i pass the fileName to resolve()
     return new Promise((resolve, reject) => {
         writer.on('finish', resolve)
         writer.on('error', reject)
@@ -956,7 +959,8 @@ exports.exportAllProfiles = async function (source, target) {
     const auth = Buffer.from(source.secret + '::').toString('base64')
     let iterations = 0;
     let fileName = `people-${iterations}.json`
-    let file = path.resolve(`${source.localPath}/exports/profiles/${fileName}`)
+	let folder = path.resolve(`${source.localPath}/exports/profiles/`)
+    let file = path.resolve(`${folder}/${fileName}`)
     let response = (await fetch({
         method: 'POST',
         url: URLs.profileExport(source.projId),
@@ -978,30 +982,30 @@ exports.exportAllProfiles = async function (source, target) {
             }
         }
     });
-	// write first page of profiles
+    // write first page of profiles
     await writeFile(file, JSON.stringify(profiles))
 
-	const encodedParams = new URLSearchParams();
+    const encodedParams = new URLSearchParams();
 
     // recursively consume all profiles
     // https://developer.mixpanel.com/reference/engage-query
     while (lastNumResults >= page_size) {
         page++
         iterations++
-        
-		fileName = `people-${iterations}.json`
-        file = path.resolve(`${source.localPath}/exports/profiles/${fileName}`)        
-        
-		encodedParams.set('page', page);
-        encodedParams.set('session_id', session_id);		
-		
-		response = (await fetch({
+
+        fileName = `people-${iterations}.json`
+        file = path.resolve(`${folder}/${fileName}`)
+
+        encodedParams.set('page', page);
+        encodedParams.set('session_id', session_id);
+
+        response = (await fetch({
             method: 'POST',
             url: URLs.profileExport(source.projId),
             headers: {
                 Authorization: `Basic ${auth}`
             },
-			data: encodedParams
+            data: encodedParams
         })).data
 
 
@@ -1017,22 +1021,63 @@ exports.exportAllProfiles = async function (source, target) {
             }
         });
         await writeFile(file, JSON.stringify(profiles))
-		
-		// update recursion
-		lastNumResults = response.results.length;
-		
+
+        // update recursion
+        lastNumResults = response.results.length;
+
 
     }
-	
+
+	return folder;
+
 }
 
 // INGESTION
-exports.sendEvents = async function (target) {
-    // https://github.com/ak--47/mixpanel-import#credentials
+// https://github.com/ak--47/mixpanel-import#credentials
+exports.sendEvents = async function (source, target, transform) {
+    const data = path.resolve(`${source.localPath}/exports/events.ndjson`)
+    const creds = {
+        acct: target.acct,
+        pass: target.pass,
+        project: target.project,
+        token: target.token
+    }
+
+    const options = {
+        recordType: `event`, //event, user, OR group
+        streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
+        region: `US`, //US or EU
+        recordsPerBatch: 2000, //max # of records in each batch
+        bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
+        strict: true, //use strict mode?
+        logs: true, //print to stdout?
+        transformFunc: transform
+    }
+    const importedData = await mpImport(creds, data, options);
+
+    return importedData
 }
 
-exports.sendProfiles = async function (target) {
+exports.sendProfiles = async function (source, target, transform) {
+    const data = path.resolve(`${source.localPath}/exports/profiles/`)
+    const creds = {
+        acct: target.acct,
+        pass: target.pass,
+        project: target.project,
+        token: target.token
+    }
 
+    const options = {
+        recordType: `user`, //event, user, OR group
+        streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
+        region: `US`, //US or EU
+        recordsPerBatch: 1000, //max # of records in each batch
+        logs: true, //print to stdout?
+        transformFunc: transform
+    }
+    const importedData = await mpImport(creds, data, options);
+
+    return importedData
 }
 
 // MISC
@@ -1078,7 +1123,7 @@ const removeNulls = function (obj) {
     }
 }
 
-const makeReports = async function (creds, reports = []) {
+const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
     loopReports: for (const report of reports) {
@@ -1174,6 +1219,41 @@ const writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
 }
 
+exports.writeFile = async function (filename, data) {
+    await fs.writeFile(filename, data);
+}
+
 const json = function (data) {
     return JSON.stringify(data, null, 2)
+}
+
+// https://stackoverflow.com/a/41951007
+const clone = function (thing, opts) {
+    var newObject = {};
+    if (thing instanceof Array) {
+        return thing.map(function (i) { return clone(i, opts); });
+    } else if (thing instanceof Date) {
+        return new Date(thing);
+    } else if (thing instanceof RegExp) {
+        return new RegExp(thing);
+    } else if (thing instanceof Function) {
+        return opts && opts.newFns ?
+            new Function('return ' + thing.toString())() :
+            thing;
+    } else if (thing instanceof Object) {
+        Object.keys(thing).forEach(function (key) {
+            newObject[key] = clone(thing[key], opts);
+        });
+        return newObject;
+    } else if ([undefined, null].indexOf(thing) > -1) {
+        return thing;
+    } else {
+        if (thing.constructor.name === 'Symbol') {
+            return Symbol(thing.toString()
+                .replace(/^Symbol\(/, '')
+                .slice(0, -1));
+        }
+        // return _.clone(thing);  // If you must use _ ;)
+        return thing.__proto__.constructor(thing);
+    }
 }

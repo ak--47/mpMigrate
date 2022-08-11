@@ -1,13 +1,14 @@
 #! /usr/bin/env node
 
 // THE GREAT MP REPORT MIGRATOR
-// yes... you can move all your dashboards + reports to a new project with ease!
-// read the docs. plz.
+// yes... you can move all your data, dashboards, reports, and custom entities to a new project with ease!
+// read the docs. watch the video. plz.
 // https://github.com/ak--47/mpMigrate
+// 
 
 require('dotenv').config();
 const u = require('./utils.js');
-
+let logs = ``;
 
 
 async function main(
@@ -22,14 +23,20 @@ async function main(
         pass: "",
         project: 1234
     },
-    transformFunc = x => x) {
+    opts = {
+        transformEventsFunc: x => x,
+        transformProfilesFunc: x => x,
+        isEU: false,
+        shouldGenerateSummary: null,
+        shouldCopyEvents: null,
+        shouldCopyProfiles: null,
+        shouldCopyEntities: null
+    }) {
 
     log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
 		(by AK)
 
-this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another
-
-first... i need to ask you a few questions...`)
+this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`)
     const { envCredsSource, envCredsTarget } = u.getEnvCreds()
 
     //choose creds based on .env or params
@@ -43,8 +50,22 @@ first... i need to ask you a few questions...`)
         log(`using .env for target credentials`)
     }
 
-    //PROMPT USER FOR INPUT
-    const { generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target)
+    //options
+    let generateSummary, copyEvents, copyProfiles, copyEntities;
+    const { transformEventsFunc, transformProfilesFunc, isEU, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts
+
+    //PROMPT USER FOR OPTIONS (if not specified)
+    if (shouldGenerateSummary === null || shouldCopyEvents === null || shouldCopyProfiles === null || shouldCopyEntities === null) {
+        log(`first... i need to ask you a few questions...`)
+            ({ generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target))
+    } else {
+        generateSummary = shouldGenerateSummary
+        copyEvents = shouldCopyEvents
+        copyProfiles = shouldCopyProfiles
+        copyEntities = shouldCopyEntities
+    }
+
+    time('migrate', 'start')
 
     //SOURCE
     //validate service account & get workspace id
@@ -59,14 +80,14 @@ first... i need to ask you a few questions...`)
     let numEvents, numProfiles, sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, foundReports, emptyDashes;
 
     // get all events
-    if (copyEvents) {
+    if (copyEvents || generateSummary) {
         log(`querying project for events since ${source.start}`, null, true)
         numEvents = await u.getProjCount(source, `events`);
         log(`	... 👍 found ${u.comma(numEvents)} events`)
     }
 
     // get all users
-    if (copyProfiles) {
+    if (copyProfiles || generateSummary) {
         log(`querying project for users`, null, true)
         numProfiles = await u.getProjCount(source, `profiles`)
         log(`	... 👍 found ${u.comma(numProfiles)} users`)
@@ -119,7 +140,7 @@ first... i need to ask you a few questions...`)
 
     if (generateSummary) {
         log(`stashing entity metadata in ${dataFolder}`, null, true)
-        await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source })
+        await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source, numEvents, numProfiles })
         log(`	... 👍 done`)
     }
 
@@ -178,12 +199,15 @@ from project: ${source.project} to project: ${target.project}
     target = { ...targetWorkspace, ...target }
     log(`	... 👍 looks good`)
 
-    let targetImportEvents, targetImportProfiles, targetSchema, targetCustEvents, targetCustProps, targetCohorts, targetDashes;
+    let sourceExportEvents, targetImportEvents, sourceExportProfiles, targetImportProfiles, targetSchema, targetCustEvents, targetCustProps, targetCohorts, targetDashes;
 
     if (copyEvents) {
-        log(`downloading ${u.comma(numEvents)} events...`)
+        log(`downloading ${u.comma(numEvents)} events...`, null, true)
         try {
-            targetImportEvents = await u.exportAllEvents(source)
+            sourceExportEvents = await u.exportAllEvents(source)
+            targetImportEvents = await u.sendEvents(source, target, transformEventsFunc)
+            log(`sent ${u.comma(targetImportEvents.results.totalRecordCount)} events in ${u.comma(targetImportEvents.results.totalReqs)} requests; writing logfile...`)
+            await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents.responses, null, 2))
         } catch (e) {
             debugger;
         }
@@ -191,10 +215,13 @@ from project: ${source.project} to project: ${target.project}
     }
 
     if (copyProfiles) {
-        log(`downloading ${u.comma(numProfiles)} profiles...`)
+        log(`downloading ${u.comma(numProfiles)} profiles...`, null, true)
 
         try {
-            targetImportProfiles = await u.exportAllProfiles(source, target)
+            sourceExportProfiles = await u.exportAllProfiles(source, target)
+            targetImportProfiles = await u.sendProfiles(source, target, transformProfilesFunc)
+            log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing logfile...`)
+            await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2))
         } catch (e) {
             debugger;
         }
@@ -215,12 +242,12 @@ from project: ${source.project} to project: ${target.project}
             log(`	... 👍 done`)
 
             log(`creating ${sourceCohorts.length} cohorts...`, null, true);
-            targetCohorts = await u.makeCohorts(target, sourceCohorts);
+            targetCohorts = await u.makeCohorts(target, sourceCohorts, targetCustEvents, targetCustProps);
             log(`	... 👍 created ${u.comma(targetCohorts.length)} cohorts`)
 
             //TODO: propagate new entity Ids to reports from custom events/props
             log(`creating ${sourceDashes.length} dashboards & ${foundReports} reports...`, null, true);
-            targetDashes = await u.makeDashes(target, sourceDashes);
+            targetDashes = await u.makeDashes(target, sourceDashes, targetCustEvents, targetCustProps);
             log(`	... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
         } catch (e) {
             debugger;
@@ -239,29 +266,48 @@ from project: ${source.project} to project: ${target.project}
         targetCustProps,
         targetDashes: targetDashes?.dashes,
         targetReports: targetDashes?.reports,
+        sourceExportEvents,
+        sourceExportProfiles,
         targetImportEvents,
         targetImportProfiles
-
-
     };
+
+    log(`all finished... thank you for playing the game`)
+    time(`migrate`, `stop`)
+    //write logs
+    await u.writeFile(`${dataFolder}/log.txt`, logs)
 
     return everyThingTheScriptDid
 }
 
 
 function log(message, data, hasResponse = false) {
+
     if (message) {
         console.log(message);
+        logs += `${message}`
         if (!hasResponse) {
             console.log('\n');
+            logs += `\n`
         }
     }
 
     if (data) {
         console.log('\n')
         console.log(JSON.stringify(data, null, 2))
+        logs += `${JSON.stringify(data, null, 2)}`
         console.log('\n')
     }
 }
+
+function time(label = `foo`, directive = `start`) {
+    if (directive === `start`) {
+        console.time(label)
+    } else if (directive === `stop`) {
+        console.timeEnd(label)
+    }
+
+}
+
 
 module.exports = main;
