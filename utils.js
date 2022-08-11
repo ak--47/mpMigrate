@@ -2,6 +2,7 @@ const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
 const FormData = require('form-data');
 const fs = require('fs').promises;
+const { createWriteStream } = require('fs')
 const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
 
@@ -10,6 +11,8 @@ const path = require('path')
 const dateFormat = `YYYY-MM-DD`
 const mpImport = require('mixpanel-import')
 const prompt = require('prompt');
+
+const stream = require('stream');
 
 
 
@@ -87,6 +90,21 @@ exports.validateServiceAccount = async function (creds) {
     globalView[0].projName = res.results.projects[project].name
     globalView[0].projId = project
 
+    // get project metadata
+    let metaData = (await fetch(URLs.getMetaData(project), {
+        auth: { username, password }
+    }).catch((e) => {
+        creds;
+        debugger;
+        console.error(`ERROR FETCHING METADATA!`)
+        console.error(e.message)
+        process.exit(1)
+    })).data.results
+
+    globalView[0].api_key = metaData.api_key
+    globalView[0].secret = metaData.secret
+    globalView[0].token = metaData.token
+
     return globalView[0];
 }
 
@@ -94,7 +112,7 @@ exports.makeProjectFolder = async function (workspace) {
     //make a folder for the data
     let folderPath = `./savedProjects/${workspace.projName} (${workspace.projId})`
     try {
-        makeDir(`./savedProjects/`);
+        makeDir(`./savedProjects/`)
     } catch (err) {
         if (err.code !== 'EEXIST') {
             throw err;
@@ -108,10 +126,26 @@ exports.makeProjectFolder = async function (workspace) {
         }
     }
 
+    try {
+        makeDir(path.resolve(`${folderPath}/exports`))
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+
+    try {
+        makeDir(path.resolve(`${folderPath}/exports/profiles`))
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+
     return path.resolve(folderPath)
 }
 
-// user prompts
+// USER PROMPTS
 exports.userPrompt = async function (source, target, shouldContinue) {
     //user input
     const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/
@@ -133,6 +167,8 @@ exports.userPrompt = async function (source, target, shouldContinue) {
                 }
             }
         }
+
+        continueSchema.properties.shouldContinue.default = 'yes'
 
         prompt.start();
         prompt.message = ``
@@ -194,8 +230,8 @@ exports.userPrompt = async function (source, target, shouldContinue) {
     } else {
         copyEntities = false
     }
-	
-	console.log(``)
+
+    console.log(``)
 
     return {
         generateSummary,
@@ -599,8 +635,13 @@ exports.makeCustomEvents = async function (creds, custEvents) {
 
 exports.saveLocalSummary = async function (projectMetaData) {
     const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source } = projectMetaData
-    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace })
-    const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary);
+    const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace });
+    const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary)
+    const writeSchema = await writeFile(path.resolve(`${source.localPath}/schema.json`), json(schema))
+    const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/customEvents.json`), json(customEvents))
+    const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/customProps.json`), json(customProps))
+    const writeCohorts = await writeFile(path.resolve(`${source.localPath}/cohorts.json`), json(cohorts))
+    const writeDashes = await writeFile(path.resolve(`${source.localPath}/dashboards.json`), json(dashes))
 }
 
 
@@ -722,7 +763,6 @@ const makeReportSummaries = function (reports) {
 
 // QUERY
 exports.getProjCount = async function (source, type) {
-    const dateFormat = `YYYY-MM-DD`
     const startDate = dayjs(source.start).format(dateFormat)
     const endDate = dayjs().format(dateFormat);
     let payload;
@@ -852,7 +892,7 @@ exports.getProjCount = async function (source, type) {
 
     const opts = {
         method: 'POST',
-        url: `https://mixpanel.com/api/2.0/insights?project_id=${source.project}`,
+        url: URLs.getInsightsReport(source.project),
         headers: {
             Accept: 'application/json'
 
@@ -886,20 +926,104 @@ exports.getProfileCount = async function (source) {
 
 }
 
-exports.getRawEvents = async function (source) {
+
+// EXPORT
+exports.exportAllEvents = async function (source) {
+    const startDate = dayjs(source.start).format(dateFormat)
+    const endDate = dayjs().format(dateFormat);
+    const url = URLs.dataExport(startDate, endDate)
+    const writer = createWriteStream(path.resolve(`${source.localPath}/exports/events.json`));
+    const auth = Buffer.from(source.secret + '::').toString('base64')
+    const response = await fetch({
+        method: 'GET',
+        url,
+        headers: {
+            Authorization: `Basic ${auth}`
+        },
+        responseType: 'stream'
+    });
+
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+        writer.on('finish', resolve)
+        writer.on('error', reject)
+    })
 
 }
 
-exports.getRawProfiles = async function (source) {
+exports.exportAllProfiles = async function (source, target) {
+    const auth = Buffer.from(source.secret + '::').toString('base64')
+    let iterations = 0;
+    let fileName = `people-${iterations}.json`
+    let file = path.resolve(`${source.localPath}/exports/profiles/${fileName}`)
+    let response = (await fetch({
+        method: 'POST',
+        url: URLs.profileExport(source.projId),
+        headers: {
+            Authorization: `Basic ${auth}`
+        },
+    })).data
 
-}
+    let { page, page_size, session_id, total } = response
+    let lastNumResults = response.results.length
+    let profiles = response.results.map(function (person) {
+        return {
+            "$token": target.token,
+            "$distinct_id": person.$distinct_id,
+            "$ignore_time": true,
+            "$ip": 0,
+            "$set": {
+                ...person.$properties
+            }
+        }
+    });
+	// write first page of profiles
+    await writeFile(file, JSON.stringify(profiles))
 
-exports.comma = function (x) {
-    try {
-        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    } catch (e) {
-        return x
+	const encodedParams = new URLSearchParams();
+
+    // recursively consume all profiles
+    // https://developer.mixpanel.com/reference/engage-query
+    while (lastNumResults >= page_size) {
+        page++
+        iterations++
+        
+		fileName = `people-${iterations}.json`
+        file = path.resolve(`${source.localPath}/exports/profiles/${fileName}`)        
+        
+		encodedParams.set('page', page);
+        encodedParams.set('session_id', session_id);		
+		
+		response = (await fetch({
+            method: 'POST',
+            url: URLs.profileExport(source.projId),
+            headers: {
+                Authorization: `Basic ${auth}`
+            },
+			data: encodedParams
+        })).data
+
+
+        profiles = response.results.map(function (person) {
+            return {
+                "$token": target.token,
+                "$distinct_id": person.$distinct_id,
+                "$ignore_time": true,
+                "$ip": 0,
+                "$set": {
+                    ...person.$properties
+                }
+            }
+        });
+        await writeFile(file, JSON.stringify(profiles))
+		
+		// update recursion
+		lastNumResults = response.results.length;
+		
+
     }
+	
 }
 
 // INGESTION
@@ -911,6 +1035,14 @@ exports.sendProfiles = async function (target) {
 
 }
 
+// MISC
+exports.comma = function (x) {
+    try {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    } catch (e) {
+        return x
+    }
+}
 
 // LOCAL UTILS
 const removeNulls = function (obj) {
@@ -1040,4 +1172,8 @@ const renameKeys = function (obj, newKeys) {
 
 const writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
+}
+
+const json = function (data) {
+    return JSON.stringify(data, null, 2)
 }

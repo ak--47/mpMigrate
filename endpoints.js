@@ -75,3 +75,18 @@ exports.delCustProp = function(projectId, custPropId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/custom_properties/${custPropId}`
 }
 
+exports.getMetaData = function(projectId) {
+	return `https://mixpanel.com/settings/project/${projectId}/metadata`
+}
+
+exports.getInsightsReport = function(projectId) {
+	return `https://mixpanel.com/api/2.0/insights?project_id=${projectId}`
+}
+
+exports.dataExport = function(start, end) {
+	return `https://data.mixpanel.com/api/2.0/export?from_date=${start}&to_date=${end}`
+}
+
+exports.profileExport = function(projectId) {
+	return `https://mixpanel.com/api/2.0/engage?project_id=${projectId}`
+}
