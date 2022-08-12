@@ -90,3 +90,7 @@ exports.dataExport = function(start, end) {
 exports.profileExport = function(projectId) {
 	return `https://mixpanel.com/api/2.0/engage?project_id=${projectId}`
 }
+
+exports.listCohorts = function(projectId, workspaceId) {
+	return `https://mixpanel.com/api/2.0/cohorts/list?project_id=${projectId}&workspace_id=${workspaceId}`
+}

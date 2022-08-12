@@ -374,8 +374,8 @@ exports.postSchema = async function (creds, schema) {
 }
 
 //TODO DEAL WITH CUSTOM PROPS + COHORTS AS FILTERS FOR EVERYTHINGS
-exports.makeCohorts = async function (creds, cohorts = [], targetCustEvents = [], targetCustProps = []) {
-    let { acct: username, pass: password, workspace } = creds
+exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
+    let { acct: username, pass: password, workspace } = targetCreds
     let results = [];
 
     for (const cohort of cohorts) {
@@ -415,14 +415,19 @@ exports.makeCohorts = async function (creds, cohorts = [], targetCustEvents = []
     return results;
 }
 
-exports.makeDashes = async function (creds, dashes = [], targetCustEvents = [], targetCustProps = []) {
-    let { acct: username, pass: password, project, workspace } = creds
+exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
+    let { acct: username, pass: password, project, workspace } = targetCreds
     let results = {
         dashes: [],
         reports: [],
         shares: [],
         pins: []
     };
+
+    //match old and new custom entities
+    let sourceEntities = { custEvents: sourceCustEvents, custProps: sourceCustProps, cohorts: sourceCohorts }
+    let targetEntities = { custEvents: targetCustEvents, custProps: targetCustProps, cohorts: targetCohorts }
+    let matchedEntities = await matchCustomEntities(sourceCreds, sourceEntities, targetEntities)
 
     loopDash: for (const dash of dashes) {
         let failed = false;
@@ -493,7 +498,7 @@ exports.makeDashes = async function (creds, dashes = [], targetCustEvents = [], 
         //use dash id to make reports
         const dashId = createdDash.data.results.id;
         creds.dashId = dashId
-        const createdReports = await makeReports(creds, reports, targetCustEvents, targetCustProps);
+        const createdReports = await makeReports(creds, reports, targetCustEvents, targetCustProps, targetCohorts);
         results.reports.push(createdReports)
 
         //update shares
@@ -651,7 +656,7 @@ const makeSummary = async function (projectMetaData) {
         const { schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles } = projectMetaData
         let title = `METADATA FOR PROJECT ${workspace.projId}\n\t${workspace.projName} (workspace ${workspace.id} : ${workspace.name})\n`
         title += `\tcollected at ${dayjs().format('MM-DD-YYYY @ hh:MM A')}\n\n`
-		title += `EVENTS: ${exports.comma(numEvents)}\nPROFILES: ${exports.comma(numProfiles)}\n\n`
+        title += `EVENTS: ${exports.comma(numEvents)}\nPROFILES: ${exports.comma(numProfiles)}\n\n`
         const schemaSummary = makeSchemaSummary(schema);
         const customEventSummary = makeCustomEventSummary(customEvents);
         const customPropSummary = makeCustomPropSummary(customProps);
@@ -933,7 +938,7 @@ exports.exportAllEvents = async function (source) {
     const startDate = dayjs(source.start).format(dateFormat)
     const endDate = dayjs().format(dateFormat);
     const url = URLs.dataExport(startDate, endDate)
-	const file = path.resolve(`${source.localPath}/exports/events.ndjson`)
+    const file = path.resolve(`${source.localPath}/exports/events.ndjson`)
     const writer = createWriteStream(file);
     const auth = Buffer.from(source.secret + '::').toString('base64')
     const response = await fetch({
@@ -947,7 +952,7 @@ exports.exportAllEvents = async function (source) {
 
     response.data.pipe(writer);
 
-	// TODO: why can't i pass the fileName to resolve()
+    // TODO: why can't i pass the fileName to resolve()
     return new Promise((resolve, reject) => {
         writer.on('finish', resolve)
         writer.on('error', reject)
@@ -959,7 +964,7 @@ exports.exportAllProfiles = async function (source, target) {
     const auth = Buffer.from(source.secret + '::').toString('base64')
     let iterations = 0;
     let fileName = `people-${iterations}.json`
-	let folder = path.resolve(`${source.localPath}/exports/profiles/`)
+    let folder = path.resolve(`${source.localPath}/exports/profiles/`)
     let file = path.resolve(`${folder}/${fileName}`)
     let response = (await fetch({
         method: 'POST',
@@ -1028,7 +1033,7 @@ exports.exportAllProfiles = async function (source, target) {
 
     }
 
-	return folder;
+    return folder;
 
 }
 
@@ -1123,7 +1128,7 @@ const removeNulls = function (obj) {
     }
 }
 
-const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps) {
+const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts) {
     let { acct: username, pass: password, project, workspace, dashId } = creds
     let results = [];
     loopReports: for (const report of reports) {
@@ -1201,6 +1206,28 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 
     return results;
+}
+
+
+const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
+    const { projId, workspace, acct, pass } = sourceCreds
+	let sourceCohortList = await fetch(URLs.listCohorts(projId, workspace), {
+        method: `POST`,
+        auth: { username :acct , password: pass }
+    })
+
+	//TODO MATCH UP SOURCE COHRTS + IDs
+	debugger;
+
+
+    let template = {
+        name: ``,
+        sourceId: ``,
+        targetId: ``,
+    }
+
+
+    return {}
 }
 
 //https://stackoverflow.com/a/45287523

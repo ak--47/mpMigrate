@@ -77,7 +77,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
     source = { ...sourceWorkspace, ...source }
     log(`	... 👍 looks good`)
 
-    let numEvents, numProfiles, sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, foundReports, emptyDashes;
+    let numEvents, numProfiles, sourceSchema, sourceCustEvents, sourceCustProps, sourceCohorts, sourceDashes, sourceFoundReports, sourceEmptyDashes;
 
     // get all events
     if (copyEvents || generateSummary) {
@@ -101,12 +101,12 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 
         //custom events + props
         log(`fetching custom events for project: ${source.project}...`, null, true)
-        customEvents = await u.getCustomEvents(source)
-        log(`	... 👍 found ${u.comma(customEvents.length)} custom events`)
+        sourceCustEvents = await u.getCustomEvents(source)
+        log(`	... 👍 found ${u.comma(sourceCustEvents.length)} custom events`)
 
         log(`fetching custom props for project: ${source.project}...`, null, true)
-        customProps = await u.getCustomProps(source)
-        log(`	... 👍 found ${u.comma(customProps.length)} custom props`)
+        sourceCustProps = await u.getCustomProps(source)
+        log(`	... 👍 found ${u.comma(sourceCustProps.length)} custom props`)
 
         //get cohorts
         log(`querying cohort metadata...`, null, true)
@@ -120,27 +120,27 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 
         //for each dashboard, get metadata for every child report
         log(`querying reports metadata...`, null, true)
-        foundReports = 0
+        sourceFoundReports = 0
         for (const [index, dash] of sourceDashes.entries()) {
             let dashReports = await u.getDashReports(source, dash.id)
-            foundReports += Object.keys(dashReports).length
+            sourceFoundReports += Object.keys(dashReports).length
 
             //store report metadata for later
             sourceDashes[index].SAVED_REPORTS = dashReports;
 
         }
-        log(`	... 👍 found ${u.comma(foundReports)} reports`)
+        log(`	... 👍 found ${u.comma(sourceFoundReports)} reports`)
 
         //filter out empty dashboards
         log(`checking for empty dashboards...`, null, true)
-        emptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
-        log(`	... found ${u.comma(emptyDashes.length)} dashboards ${emptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
+        sourceEmptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
+        log(`	... found ${u.comma(sourceEmptyDashes.length)} dashboards ${sourceEmptyDashes.length > 0 ? '(these will NOT be copied)': ''}`)
         sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0)
     }
 
     if (generateSummary) {
         log(`stashing entity metadata in ${dataFolder}`, null, true)
-        await u.saveLocalSummary({ sourceSchema, customEvents, customProps, sourceCohorts, sourceDashes, sourceWorkspace, source, numEvents, numProfiles })
+        await u.saveLocalSummary({ sourceSchema, customEvents: sourceCustEvents, customProps: sourceCustProps, sourceCohorts, sourceDashes, sourceWorkspace, source, numEvents, numProfiles })
         log(`	... 👍 done`)
     }
 
@@ -161,11 +161,11 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 
     if (copyEntities) {
         intentString += `${u.comma(sourceSchema.length)} events & props schema
-${u.comma(customEvents.length)} custom events
-${u.comma(customProps.length)} custom props
+${u.comma(sourceCustEvents.length)} custom events
+${u.comma(sourceCustProps.length)} custom props
 ${u.comma(sourceCohorts.length)} cohorts
 ${u.comma(sourceDashes.length)} dashboards
-${u.comma(foundReports)} reports`
+${u.comma(sourceFoundReports)} reports`
     }
 
 
@@ -235,19 +235,19 @@ from project: ${source.project} to project: ${target.project}
             log(`	... 👍 done`)
 
             //create custom events + props
-            log(`creating ${customEvents.length} custom events + ${customProps.length} custom props...`, null, true);
+            log(`creating ${sourceCustEvents.length} custom events + ${sourceCustProps.length} custom props...`, null, true);
             // BROKEN
-            if (customEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, customEvents);
-            if (customProps.length > 0) targetCustProps = await u.makeCustomProps(target, customProps);
+            if (sourceCustEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, sourceCustEvents);
+            if (sourceCustProps.length > 0) targetCustProps = await u.makeCustomProps(target, sourceCustProps);
             log(`	... 👍 done`)
 
             log(`creating ${sourceCohorts.length} cohorts...`, null, true);
-            targetCohorts = await u.makeCohorts(target, sourceCohorts, targetCustEvents, targetCustProps);
+            targetCohorts = await u.makeCohorts(source, target, sourceCohorts, sourceCustEvents, sourceCustProps, targetCustEvents, targetCustProps);
             log(`	... 👍 created ${u.comma(targetCohorts.length)} cohorts`)
 
             //TODO: propagate new entity Ids to reports from custom events/props
-            log(`creating ${sourceDashes.length} dashboards & ${foundReports} reports...`, null, true);
-            targetDashes = await u.makeDashes(target, sourceDashes, targetCustEvents, targetCustProps);
+            log(`creating ${sourceDashes.length} dashboards & ${sourceFoundReports} reports...`, null, true);
+            targetDashes = await u.makeDashes(source, target, sourceDashes, sourceCustEvents, sourceCustProps, sourceCohorts, targetCustEvents, targetCustProps, targetCohorts);
             log(`	... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)
         } catch (e) {
             debugger;
