@@ -5,15 +5,14 @@ const fs = require('fs').promises;
 const { createWriteStream } = require('fs')
 const makeDir = require('fs').mkdirSync
 const { pick } = require('underscore');
-
 const dayjs = require('dayjs')
 const path = require('path')
 const dateFormat = `YYYY-MM-DD`
 const mpImport = require('mixpanel-import')
 const prompt = require('prompt');
-
 const stream = require('stream');
-
+const { URLSearchParams } = require('url')
+const qs = require('qs')
 
 
 // AUTH
@@ -312,7 +311,7 @@ exports.getSchema = async function (creds) {
 
 exports.getCustomEvents = async function (creds) {
     let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.customEvents(workspace), {
+    let res = (await fetch(URLs.getCustomEvents(workspace), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -326,7 +325,7 @@ exports.getCustomEvents = async function (creds) {
 }
 exports.getCustomProps = async function (creds) {
     let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.customProps(workspace), {
+    let res = (await fetch(URLs.getCustomProps(workspace), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -564,7 +563,7 @@ exports.makeCustomProps = async function (creds, custProps) {
         custProp.global_access_type = "on"
 
         //make the dashboard; get back id
-        let createdCustProp = await fetch(URLs.customProps(workspace), {
+        let createdCustProp = await fetch(URLs.createCustomProp(workspace), {
             method: `post`,
             auth: { username, password },
             data: custProp
@@ -593,23 +592,32 @@ exports.makeCustomEvents = async function (creds, custEvents) {
     let results = [];
     loopCustomEvents: for (const custEvent of custEvents) {
         let failed = false;
+        const { name, alternatives } = custEvent
 
         //custom events must be posted as forms?!?
         //why?
-        let custPayload = new FormData();
-        custPayload.append('name', custEvent.name);
+		let body = `alternatives=${encodeURIComponent(JSON.stringify(custEvent.alternatives))}&name=${encodeURIComponent(custEvent.name)}`
+        
+		let custPayload = new FormData();
         custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
-        let formHeaders = custPayload.getHeaders();
+        custPayload.append('name', custEvent.name);
+        let headers = custPayload.getHeaders();
+        		
+		let altBody = qs.stringify({alternatives, name})
+        const params = new URLSearchParams({ name, alternatives: JSON.stringify(alternatives) }).toString();
+
+		let payload = {name, alternatives }
 
 
-        //get back id
-        let createdCustEvent = await fetch(URLs.customEvents(workspace), {
-            method: `post`,
-            auth: { username, password },
-            headers: {
-                ...formHeaders,
+        //get back id - BORKED
+        let createdCustEvent = await fetch(URLs.createCustomEvent(workspace), {
+            method: 'post',
+			headers: {
+                'content-type': 'application/x-www-form-urlencoded'
             },
-            data: custPayload
+            auth: { username, password },
+            data: qs.stringify(payload),
+			maxRedirects: 1
 
         }).catch((e) => {
             failed = true
@@ -626,7 +634,7 @@ exports.makeCustomEvents = async function (creds, custEvents) {
         if (failed) {
             continue loopCustomEvents;
         } else {
-            // //share custom event
+            //share custom event
             // await fetch(URLs.shareCustEvent(project, createdCustEvent.id), {
             //     method: 'post',
             //     auth: { username, password },
@@ -1211,13 +1219,13 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
     const { projId, workspace, acct, pass } = sourceCreds
-	let sourceCohortList = await fetch(URLs.listCohorts(projId, workspace), {
+    let sourceCohortList = await fetch(URLs.listCohorts(projId, workspace), {
         method: `POST`,
-        auth: { username :acct , password: pass }
+        auth: { username: acct, password: pass }
     })
 
-	//TODO MATCH UP SOURCE COHRTS + IDs
-	debugger;
+    //TODO MATCH UP SOURCE COHRTS + IDs
+    debugger;
 
 
     let template = {
