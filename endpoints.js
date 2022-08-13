@@ -56,8 +56,10 @@ exports.deleteCohorts = function(projectId) {
 }
 
 exports.createCustomEvent = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
+	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events/`
 }
+
+
 
 exports.getCustomEvents = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
@@ -70,6 +72,10 @@ exports.delCustEvent = function(workspaceId) {
 
 exports.shareCustEvent = function(projectId, custEvId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-events/${custEvId}/upsert`
+}
+
+exports.shareCustProp = function(projectId, custPropId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-properties/${custPropId}/upsert`
 }
 
 exports.createCustomProp = function(workSpaceId) {

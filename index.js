@@ -236,9 +236,8 @@ from project: ${source.project} to project: ${target.project}
 
             //create custom events + props
             log(`creating ${sourceCustEvents.length} custom events + ${sourceCustProps.length} custom props...`, null, true);
-            // BROKEN
-            if (sourceCustEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, sourceCustEvents);
             if (sourceCustProps.length > 0) targetCustProps = await u.makeCustomProps(target, sourceCustProps);
+			if (sourceCustEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, sourceCustEvents);            
             log(`	... 👍 done`)
 
             log(`creating ${sourceCohorts.length} cohorts...`, null, true);

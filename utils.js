@@ -10,9 +10,8 @@ const path = require('path')
 const dateFormat = `YYYY-MM-DD`
 const mpImport = require('mixpanel-import')
 const prompt = require('prompt');
-const stream = require('stream');
 const { URLSearchParams } = require('url')
-const qs = require('qs')
+
 
 
 // AUTH
@@ -407,7 +406,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
             return {}
         });
 
-        results.push(createdCohort);
+        results.push(createdCohort.data.results);
 
     }
 
@@ -572,74 +571,69 @@ exports.makeCustomProps = async function (creds, custProps) {
             failed = true
             custProp;
             debugger;
-            console.error(`ERROR MAKING CUSTOM PROP!\n${JSON.stringify(custProp, null, 2)}`)
-            console.error(e.message)
-            return {}
+			console.error(`ERROR MAKING CUST PROP! ${custProp.name}`)
+            console.error(`${e.message} : ${e.response.data.error}`)
 
         });
-        results.push(createdCustProp?.data?.results);
+		let customProp = createdCustProp?.data?.results
+        results.push(customProp);
         if (failed) {
             continue loopCustomProps;
+        } else {
+            // share custom event
+            await fetch(URLs.shareCustProp(project, customProp.customPropertyId), {
+                method: 'post',
+                auth: { username, password },
+                data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
+            }).catch((e)=>{
+				debugger;
+			})
         }
     }
 
     return results
 }
 
-// BROKEN
 exports.makeCustomEvents = async function (creds, custEvents) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = [];
     loopCustomEvents: for (const custEvent of custEvents) {
         let failed = false;
         const { name, alternatives } = custEvent
-
         //custom events must be posted as forms?!?
-        //why?
-		let body = `alternatives=${encodeURIComponent(JSON.stringify(custEvent.alternatives))}&name=${encodeURIComponent(custEvent.name)}`
-        
-		let custPayload = new FormData();
-        custPayload.append('alternatives', JSON.stringify(custEvent.alternatives));
-        custPayload.append('name', custEvent.name);
+        let custPayload = new FormData();
+        custPayload.append('name', name);
+        custPayload.append('alternatives', JSON.stringify(alternatives));
         let headers = custPayload.getHeaders();
-        		
-		let altBody = qs.stringify({alternatives, name})
-        const params = new URLSearchParams({ name, alternatives: JSON.stringify(alternatives) }).toString();
 
-		let payload = {name, alternatives }
-
-
-        //get back id - BORKED
         let createdCustEvent = await fetch(URLs.createCustomEvent(workspace), {
             method: 'post',
-			headers: {
-                'content-type': 'application/x-www-form-urlencoded'
-            },
             auth: { username, password },
-            data: qs.stringify(payload),
-			maxRedirects: 1
-
+            headers,
+            data: custPayload,
         }).catch((e) => {
             failed = true
-            custEvent;
+            name;
             debugger;
-            console.error(`ERROR MAKING CUST EVENT!\n${JSON.stringify(custEvent), null, 2}`)
-            console.error(e.message)
-            return {}
-
+            console.error(`ERROR MAKING CUST EVENT! ${name}`)
+            console.error(`${e.message} : ${e.response.data.error}`)			
         });
-        results.push(createdCustEvent);
+
+		let customEvent = createdCustEvent?.data?.custom_event
+        results.push(customEvent)
 
         //two outcomes
         if (failed) {
             continue loopCustomEvents;
         } else {
-            //share custom event
-            // await fetch(URLs.shareCustEvent(project, createdCustEvent.id), {
-            //     method: 'post',
-            //     auth: { username, password },
-            //     data: { "id": createdCustEvent.id, "projectShares": [{ "id": project, "canEdit": true }] }
-            // })
+            // share custom event
+            await fetch(URLs.shareCustEvent(project, customEvent?.id), {
+                method: 'post',
+                auth: { username, password },
+                data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
+            }).catch((e) => {
+				debugger;
+			})
         }
     }
 
@@ -1219,23 +1213,27 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
     const { projId, workspace, acct, pass } = sourceCreds
-    let sourceCohortList = await fetch(URLs.listCohorts(projId, workspace), {
+    let sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace), {
         method: `POST`,
         auth: { username: acct, password: pass }
-    })
+    })).data
 
-    //TODO MATCH UP SOURCE COHRTS + IDs
-    debugger;
+	let results = {
+		cohorts: [],
+		custEvents: [],
+		custProps: []
+	}
 
-
-    let template = {
+	let template = {
         name: ``,
         sourceId: ``,
         targetId: ``,
     }
 
+    //TODO MATCH UP SOURCE COHRTS + IDs
+    debugger;
 
-    return {}
+    return results;
 }
 
 //https://stackoverflow.com/a/45287523
