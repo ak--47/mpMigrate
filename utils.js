@@ -14,7 +14,7 @@ const { URLSearchParams } = require('url')
 
 
 
-// AUTH
+// AUTH + PERSISTENCE
 exports.getEnvCreds = function () {
     //sweep .env to pickup creds
     const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`)
@@ -242,9 +242,6 @@ exports.userPrompt = async function (source, target, shouldContinue) {
 
 }
 
-exports.continue = async function () {
-
-}
 
 // GETTERS
 exports.getCohorts = async function (creds) {
@@ -375,6 +372,11 @@ exports.postSchema = async function (creds, schema) {
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
     let { acct: username, pass: password, workspace } = targetCreds
     let results = [];
+
+    // //match old and new custom entities
+    // let sourceEntities = { custEvents: sourceCustEvents, custProps: sourceCustProps }
+    // let targetEntities = { custEvents: targetCustEvents, custProps: targetCustProps }
+    // let matchedEntities = await matchCustomEntities(sourceCreds, sourceEntities, targetEntities)
 
     for (const cohort of cohorts) {
         //get rid of disallowed keys
@@ -571,11 +573,11 @@ exports.makeCustomProps = async function (creds, custProps) {
             failed = true
             custProp;
             debugger;
-			console.error(`ERROR MAKING CUST PROP! ${custProp.name}`)
+            console.error(`ERROR MAKING CUST PROP! ${custProp.name}`)
             console.error(`${e.message} : ${e.response.data.error}`)
 
         });
-		let customProp = createdCustProp?.data?.results
+        let customProp = createdCustProp?.data?.results
         results.push(customProp);
         if (failed) {
             continue loopCustomProps;
@@ -585,18 +587,24 @@ exports.makeCustomProps = async function (creds, custProps) {
                 method: 'post',
                 auth: { username, password },
                 data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
-            }).catch((e)=>{
-				debugger;
-			})
+            }).catch((e) => {
+                debugger;
+            })
         }
     }
 
     return results
 }
 
-exports.makeCustomEvents = async function (creds, custEvents) {
+exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
     let { acct: username, pass: password, project, workspace } = creds
     let results = [];
+
+    // //match old and new custom entities
+    // let sourceEntities = { custProps: sourceCustProps }
+    // let targetEntities = { custProps: targetCustProps }
+    // let matchedEntities = await matchCustomEntities(null, sourceEntities, targetEntities)
+
     loopCustomEvents: for (const custEvent of custEvents) {
         let failed = false;
         const { name, alternatives } = custEvent
@@ -616,10 +624,10 @@ exports.makeCustomEvents = async function (creds, custEvents) {
             name;
             debugger;
             console.error(`ERROR MAKING CUST EVENT! ${name}`)
-            console.error(`${e.message} : ${e.response.data.error}`)			
+            console.error(`${e.message} : ${e.response.data.error}`)
         });
 
-		let customEvent = createdCustEvent?.data?.custom_event
+        let customEvent = createdCustEvent?.data?.custom_event
         results.push(customEvent)
 
         //two outcomes
@@ -632,8 +640,8 @@ exports.makeCustomEvents = async function (creds, custEvents) {
                 auth: { username, password },
                 data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
             }).catch((e) => {
-				debugger;
-			})
+                debugger;
+            })
         }
     }
 
@@ -1212,26 +1220,37 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 
 const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
-    const { projId, workspace, acct, pass } = sourceCreds
-    let sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace), {
-        method: `POST`,
-        auth: { username: acct, password: pass }
-    })).data
+    let sourceCohortList = [];
 
-	let results = {
-		cohorts: [],
-		custEvents: [],
-		custProps: []
-	}
+    if (sourceCreds) {
+        const { projId, workspace, acct, pass } = sourceCreds
+        sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace), {
+            method: `POST`,
+            auth: { username: acct, password: pass }
+        })).data
 
-	let template = {
-        name: ``,
-        sourceId: ``,
-        targetId: ``,
+    }
+    let results = {
+        cohorts: [],
+        custEvents: [],
+        custProps: []
     }
 
-    //TODO MATCH UP SOURCE COHRTS + IDs
-    debugger;
+
+    sourceEntities.cohorts = sourceCohortList
+
+    //iterate through all source types and produce mappings of source and target
+    let entityTypes = Object.keys(sourceEntities);
+    for (const type of entityTypes) {
+        for (const [index, entity] of Object.entries(sourceEntities[type])) {
+            let template = {
+                name: entity.name,
+                sourceId: sourceEntities[type][index]?.id,
+                targetId: targetEntities[type][index]?.id,
+            }
+            results[type].push(template)
+        }
+    }
 
     return results;
 }
@@ -1247,6 +1266,9 @@ const renameKeys = function (obj, newKeys) {
     return Object.assign({}, ...keyValues)
 }
 
+const replaceIds = function (payload, matchList) {
+    let raw = JSON.stringify(payload)
+}
 
 const writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
