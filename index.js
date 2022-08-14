@@ -234,7 +234,6 @@ from project: ${source.project} to project: ${target.project}
             targetSchema = await u.postSchema(target, sourceSchema)
             log(`	... 👍 done`)
 
-            //create custom events + props
             log(`creating ${sourceCustEvents.length} custom events + ${sourceCustProps.length} custom props...`, null, true);
             if (sourceCustProps.length > 0) targetCustProps = await u.makeCustomProps(target, sourceCustProps);
 			if (sourceCustEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, sourceCustEvents, sourceCustProps, targetCustProps);            
@@ -244,7 +243,6 @@ from project: ${source.project} to project: ${target.project}
             targetCohorts = await u.makeCohorts(source, target, sourceCohorts, sourceCustEvents, sourceCustProps, targetCustEvents, targetCustProps);
             log(`	... 👍 created ${u.comma(targetCohorts.length)} cohorts`)
 
-            //TODO: propagate new entity Ids to reports from custom events/props
             log(`creating ${sourceDashes.length} dashboards & ${sourceFoundReports} reports...`, null, true);
             targetDashes = await u.makeDashes(source, target, sourceDashes, sourceCustEvents, sourceCustProps, sourceCohorts, targetCustEvents, targetCustProps, targetCohorts);
             log(`	... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`)

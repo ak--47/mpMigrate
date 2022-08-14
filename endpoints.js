@@ -86,6 +86,9 @@ exports.getCustomProps = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
 }
 
+exports.dataDefinitions = function(resourceType, workSpaceId) {
+	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/data-definitions/properties?resourceType=${resourceType}&includeCustom=true`
+}
 
 exports.delCustProp = function(projectId, custPropId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/custom_properties/${custPropId}`
