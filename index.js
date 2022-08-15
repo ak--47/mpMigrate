@@ -8,6 +8,7 @@
 
 require('dotenv').config();
 const u = require('./utils.js');
+const del = require('./deleteEntities.js')
 let logs = ``;
 
 
@@ -55,9 +56,9 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
     const { transformEventsFunc, transformProfilesFunc, isEU, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts
 
     //PROMPT USER FOR OPTIONS (if not specified)
-    if (shouldGenerateSummary === null || shouldCopyEvents === null || shouldCopyProfiles === null || shouldCopyEntities === null) {
-        log(`first... i need to ask you a few questions...`)
-            ({ generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target))
+    if ( isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
+        log(`first... i need to ask you a few questions...`);
+            ({ generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target));
     } else {
         generateSummary = shouldGenerateSummary
         copyEvents = shouldCopyEvents
@@ -306,5 +307,11 @@ function time(label = `foo`, directive = `start`) {
 
 }
 
+function isNotSet (val) {
+	return val === undefined || val === null;
+}
 
-module.exports = main;
+module.exports = {
+	projectCopy : main,
+	entityDelete : del
+};

@@ -568,6 +568,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
     return results
 }
 
+//TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
     let { acct: username, pass: password, project, workspace } = targetCreds
 

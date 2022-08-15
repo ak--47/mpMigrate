@@ -4,10 +4,23 @@
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --inspect scratch.js",
     "delete": "MODE=delete node scratch.js",
-    "prune": "rm -rf ./savedProjects/*"
+    "prune": "rm -rf ./savedProjects/*",
+    "publish": "npm publish"
   },
+  "bin": {
+    "mp-migrate": "./index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ak--47/mpMigrate"
+  },
+  "bugs": {
+    "url": "https://github.com/ak--47/mpMigrate/issues"
+  },
+  "homepage": "https://github.com/ak--47/mpMigrate#readme",
   "author": "AK",
   "license": "ISC",
   "dependencies": {
@@ -20,5 +33,8 @@
     "prompt": "^1.3.0",
     "qs": "^6.11.0",
     "underscore": "^1.13.4"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
   }
 }

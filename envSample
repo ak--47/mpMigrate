@@ -1,7 +1,8 @@
 # this file should be called .env and be in the same directory you're running the command
-SOURCE_ACCT = '' #service account username for the source project
-SOURCE_PASS = '' #service account secret for the source project
-SOURCE_PROJECT = '' #source project's ID
-TARGET_ACCT = '' #service account username for target project
-TARGET_PASS = '' #service account secret for target project
-TARGET_PROJECT = '' #target project's ID
+SOURCE_ACCT = '{{ my OLD project service account }}' 
+SOURCE_PASS = '{{ my OLD project service secret }}' 
+SOURCE_PROJECT = '{{ my OLD project id }}' 
+SOURCE_DATE = '{{ the date of first event in old project, eg... 04-30-2022 }}' 
+TARGET_ACCT = '{{ my NEW project service account }}' 
+TARGET_PASS = '{{ my NEW project secret }}' 
+TARGET_PROJECT = '{{ my NEW project id }}' 
