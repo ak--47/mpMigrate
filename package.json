@@ -1,6 +1,6 @@
 {
   "name": "mp-migrate",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "scripts": {

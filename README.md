@@ -2,7 +2,7 @@
 
 ## wat.
 
-`mpMigrate` is a command-line ETL script in Node.js that provides one-time mixpanel **project migrations**. 
+`mpMigrate` is a command-line ETL script in Node.js that provides one-time mixpanel **project migrations**. [watch the demo](#demo) to see it in action.
 
 essentially, this utility can **copy** most saved entities in any mixpanel project including:
 
@@ -52,8 +52,8 @@ $ npx mp-migrate
 
 logs are stashed in `./savedProjects/<project name>` 
 
-# DEMO
-coming soon...
+# DEMO <div id="demo"></div>
+[![mpMigrate Demo](https://aktunes.neocities.org/mpMigrate/migrateThumb.png)](https://youtu.be/jOCcFiT53gU)
 
 ## CLI <div id="CLI"></div>
 `mpMigrate` can be used as a command-line-interface which offers the user choices about which entities it will copy.
