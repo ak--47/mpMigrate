@@ -35,7 +35,7 @@ currently **not** supported:
 ## tldr;
 supply credentials:
 ```bash
-$ cat "SOURCE_ACCT = '{{ OLD project service account }}'
+$ echo "SOURCE_ACCT = '{{ OLD project service account }}'
 SOURCE_PASS = '{{ OLD project service secret }}'
 SOURCE_PROJECT = '{{ OLD project id }}'
 SOURCE_DATE = '{{ date of first event in OLD project, eg... 04-20-2022 }}'
@@ -140,12 +140,12 @@ you can also use the `mp-migrate` package to **delete saved entities** in an exi
 ⚠️ use with caution ⚠️
 
 ```javascript
-const { deleteEntities } =  require('mp-migrate')
+const { entityDelete } =  require('mp-migrate')
 let target = {
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
 	project: 12345,
 }
-let result = await deleteEntities(target)
+let result = await entityDelete(target)
 ```
 i'm serious... there's no way to undo this.

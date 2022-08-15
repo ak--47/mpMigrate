@@ -315,3 +315,11 @@ module.exports = {
 	projectCopy : main,
 	entityDelete : del
 };
+
+//this allows the module to function as a standalone script
+if (require.main === module) {
+    main(null).then((result) => {
+        console.log(JSON.stringify(result, null, 2));
+    })
+
+}
