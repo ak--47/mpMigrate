@@ -74,7 +74,7 @@ exports.validateServiceAccount = async function (creds) {
         workspaces.push(res.results.workspaces[workSpaceId])
     }
 
-    let globalView = workspaces.filter(x => x.project_id === project && x.is_global);
+    let globalView = workspaces.filter(x => x.project_id == project && x.is_global);
 
     if (globalView.length > 0) {
         `pass: global access`
