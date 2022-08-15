@@ -1,6 +1,6 @@
 {
   "name": "mp-migrate",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --inspect scratch.js",
     "delete": "MODE=delete node scratch.js",
     "prune": "rm -rf ./savedProjects/*",
-    "publish": "npm publish"
+    "upload": "npm publish"
   },
   "bin": {
     "mp-migrate": "./index.js"
