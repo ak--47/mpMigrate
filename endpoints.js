@@ -51,6 +51,10 @@ exports.makeCohorts = function(workSpaceId) {
 	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
 }
 
+exports.shareCohort = function(projectId, cohortId) {
+	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/cohorts/${cohortId}/upsert`
+}
+
 exports.deleteCohorts = function(projectId) {
 	return `https://mixpanel.com/api/app/projects/${projectId}/cohorts/bulk-delete/`
 }

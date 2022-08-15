@@ -99,6 +99,8 @@ for project: ${target.project}
         })
     }
 
+	log(`... 👍 done`)
+
 
     //delete cohorts
     let deletedCohorts = [];

@@ -360,7 +360,7 @@ exports.getCustomProps = async function (creds) {
 // SETTERS
 exports.postSchema = async function (creds, schema) {
     let { acct: username, pass: password, project } = creds
-    
+
     schema = schema.filter(e => !e.entityType.includes('custom'))
 
     //remove "unknown" types by iterating through properties; they are not allowed by the API
@@ -391,7 +391,7 @@ exports.postSchema = async function (creds, schema) {
 
 //TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
-    let { acct: username, pass: password, workspace } = targetCreds
+    let { acct: username, pass: password, workspace, project } = targetCreds
     let results = [];
 
     // //match old and new custom entities
@@ -399,7 +399,8 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
     // let targetEntities = { custEvents: targetCustEvents, custProps: targetCustProps }
     // let matchedEntities = await matchCustomEntities(sourceCreds, sourceEntities, targetEntities)
 
-    for (const cohort of cohorts) {
+    createCohorts: for (const cohort of cohorts) {
+        let failed = false;
         //get rid of disallowed keys
         delete cohort.count
         delete cohort.created_by
@@ -422,6 +423,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
             data: cohort
 
         }).catch((e) => {
+            failed = true
             cohort;
             debugger;
             console.error(`ERROR CREATING COHORT!`)
@@ -431,11 +433,139 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 
         results.push(createdCohort.data.results);
 
-		//TODO share cohort
-
+        if (failed) {
+            continue createCohorts;
+        } else {
+            await fetch(URLs.shareCohort(project, createdCohort.data.results.id), {
+                method: 'post',
+                auth: { username, password },
+                data: { "id": createdCohort.data.results.id, "projectShares": [{ "id": project, "canEdit": true }] }
+            }).catch((e) => {
+                debugger;
+            })
+        }
     }
 
     return results;
+}
+
+exports.makeCustomProps = async function (creds, custProps) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let results = [];
+    let customProperties = clone(custProps)
+    loopCustomProps: for (const custProp of customProperties) {
+        let failed = false;
+        //get rid of disallowed keys       
+        delete custProp.user
+        delete custProp.created
+        delete custProp.customPropertyId
+        delete custProp.allow_staff_override
+        delete custProp.can_share
+        delete custProp.can_update_basic
+        delete custProp.can_view
+        delete custProp.canUpdateBasic
+        delete custProp.modified
+        delete custProp.referencedBy
+        delete custProp.referencedDirectlyBy
+        delete custProp.referencedRawEventProperties
+        delete custProp.project
+
+        //get rid of null keys
+        for (let key in custProp) {
+            if (custProp[key] === null) {
+                delete custProp[key]
+            }
+        }
+
+        //defaultPublic
+        custProp.global_access_type = "on"
+
+        //make the dashboard; get back id
+        let createdCustProp = await fetch(URLs.createCustomProp(workspace), {
+            method: `post`,
+            auth: { username, password },
+            data: custProp
+
+        }).catch((e) => {
+            failed = true
+            custProp;
+            debugger;
+            console.error(`ERROR MAKING CUST PROP! ${custProp.name}`)
+            console.error(`${e.message} : ${e.response.data.error}`)
+			return {}
+
+        });
+        let customProp = createdCustProp?.data?.results
+        results.push(customProp);
+        if (failed) {
+            continue loopCustomProps;
+        } else {
+            // share custom event
+            await fetch(URLs.shareCustProp(project, customProp.customPropertyId), {
+                method: 'post',
+                auth: { username, password },
+                data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
+            }).catch((e) => {
+                debugger;
+            })
+        }
+    }
+
+    return results
+}
+
+//TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
+exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
+    let { acct: username, pass: password, project, workspace } = creds
+    let results = [];
+
+    // //match old and new custom entities
+    // let sourceEntities = { custProps: sourceCustProps }
+    // let targetEntities = { custProps: targetCustProps }
+    // let matchedEntities = await matchCustomEntities(null, sourceEntities, targetEntities)
+    let customEvents = clone(custEvents)
+    loopCustomEvents: for (const custEvent of customEvents) {
+        let failed = false;
+        const { name, alternatives } = custEvent
+        //custom events must be posted as forms?!?
+        let custPayload = new FormData();
+        custPayload.append('name', name);
+        custPayload.append('alternatives', JSON.stringify(alternatives));
+        let headers = custPayload.getHeaders();
+
+        let createdCustEvent = await fetch(URLs.createCustomEvent(workspace), {
+            method: 'post',
+            auth: { username, password },
+            headers,
+            data: custPayload,
+        }).catch((e) => {
+            failed = true
+            name;
+            debugger;
+            console.error(`ERROR MAKING CUST EVENT! ${name}`)
+            console.error(`${e.message} : ${e.response.data.error}`)
+			return {}
+        });
+
+        let customEvent = createdCustEvent?.data?.custom_event
+        results.push(customEvent)
+
+        //two outcomes
+        if (failed) {
+            continue loopCustomEvents;
+        } else {
+            // share custom event
+            await fetch(URLs.shareCustEvent(project, customEvent?.id), {
+                method: 'post',
+                auth: { username, password },
+                data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
+            }).catch((e) => {
+                debugger;
+            })
+        }
+    }
+
+    return results
 }
 
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
@@ -563,123 +693,6 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
     }
 
     results.reports = results.reports.flat()
-    return results
-}
-
-exports.makeCustomProps = async function (creds, custProps) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let results = [];
-    let customProperties = clone(custProps)
-    loopCustomProps: for (const custProp of customProperties) {
-        let failed = false;
-        //get rid of disallowed keys       
-        delete custProp.user
-        delete custProp.created
-        delete custProp.customPropertyId
-        delete custProp.allow_staff_override
-        delete custProp.can_share
-        delete custProp.can_update_basic
-        delete custProp.can_view
-        delete custProp.canUpdateBasic
-        delete custProp.modified
-        delete custProp.referencedBy
-        delete custProp.referencedDirectlyBy
-        delete custProp.referencedRawEventProperties
-        delete custProp.project
-
-        //get rid of null keys
-        for (let key in custProp) {
-            if (custProp[key] === null) {
-                delete custProp[key]
-            }
-        }
-
-        //defaultPublic
-        custProp.global_access_type = "on"
-
-        //make the dashboard; get back id
-        let createdCustProp = await fetch(URLs.createCustomProp(workspace), {
-            method: `post`,
-            auth: { username, password },
-            data: custProp
-
-        }).catch((e) => {
-            failed = true
-            custProp;
-            debugger;
-            console.error(`ERROR MAKING CUST PROP! ${custProp.name}`)
-            console.error(`${e.message} : ${e.response.data.error}`)
-
-        });
-        let customProp = createdCustProp?.data?.results
-        results.push(customProp);
-        if (failed) {
-            continue loopCustomProps;
-        } else {
-            // share custom event
-            await fetch(URLs.shareCustProp(project, customProp.customPropertyId), {
-                method: 'post',
-                auth: { username, password },
-                data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
-            }).catch((e) => {
-                debugger;
-            })
-        }
-    }
-
-    return results
-}
-
-//TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
-exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let results = [];
-
-    // //match old and new custom entities
-    // let sourceEntities = { custProps: sourceCustProps }
-    // let targetEntities = { custProps: targetCustProps }
-    // let matchedEntities = await matchCustomEntities(null, sourceEntities, targetEntities)
-    let customEvents = clone(custEvents)
-    loopCustomEvents: for (const custEvent of customEvents) {
-        let failed = false;
-        const { name, alternatives } = custEvent
-        //custom events must be posted as forms?!?
-        let custPayload = new FormData();
-        custPayload.append('name', name);
-        custPayload.append('alternatives', JSON.stringify(alternatives));
-        let headers = custPayload.getHeaders();
-
-        let createdCustEvent = await fetch(URLs.createCustomEvent(workspace), {
-            method: 'post',
-            auth: { username, password },
-            headers,
-            data: custPayload,
-        }).catch((e) => {
-            failed = true
-            name;
-            debugger;
-            console.error(`ERROR MAKING CUST EVENT! ${name}`)
-            console.error(`${e.message} : ${e.response.data.error}`)
-        });
-
-        let customEvent = createdCustEvent?.data?.custom_event
-        results.push(customEvent)
-
-        //two outcomes
-        if (failed) {
-            continue loopCustomEvents;
-        } else {
-            // share custom event
-            await fetch(URLs.shareCustEvent(project, customEvent?.id), {
-                method: 'post',
-                auth: { username, password },
-                data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
-            }).catch((e) => {
-                debugger;
-            })
-        }
-    }
-
     return results
 }
 
@@ -843,7 +856,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
     let results = [];
     loopReports: for (const report of reports) {
         let failed = false;
-      
+
         report.global_access_type = "on"
 
         //get rid of disallowed keys
