@@ -132,6 +132,14 @@ exports.makeProjectFolder = async function (workspace) {
         }
     }
 
+	try {
+        makeDir(path.resolve(`${folderPath}/payloads`))
+    } catch (err) {
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+
     try {
         makeDir(path.resolve(`${folderPath}/exports/profiles`))
     } catch (err) {
@@ -1235,11 +1243,11 @@ exports.saveLocalSummary = async function (projectMetaData) {
     const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData
     const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
     const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary)
-    const writeSchema = await writeFile(path.resolve(`${source.localPath}/schema.json`), json(schema))
-    const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/customEvents.json`), json(customEvents))
-    const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/customProps.json`), json(customProps))
-    const writeCohorts = await writeFile(path.resolve(`${source.localPath}/cohorts.json`), json(cohorts))
-    const writeDashes = await writeFile(path.resolve(`${source.localPath}/dashboards.json`), json(dashes))
+    const writeSchema = await writeFile(path.resolve(`${source.localPath}/payloads/schema.json`), json(schema))
+    const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/payloads/customEvents.json`), json(customEvents))
+    const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/payloads/customProps.json`), json(customProps))
+    const writeCohorts = await writeFile(path.resolve(`${source.localPath}/payloads/cohorts.json`), json(cohorts))
+    const writeDashes = await writeFile(path.resolve(`${source.localPath}/payloads/dashboards.json`), json(dashes))
 }
 
 const makeSummary = async function (projectMetaData) {
