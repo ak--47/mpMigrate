@@ -35,7 +35,7 @@ async function main(
 	}) {
 
 	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
-		(by AK)
+		(by AK) v1.07
 
 this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`);
 	const { envCredsSource, envCredsTarget } = u.getEnvCreds();
