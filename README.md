@@ -71,7 +71,7 @@ TARGET_PROJECT = ''  #target project's ID
 ```
 with that configuration file present in the same directory, you can then run:
 ```bash
-$ npx mp-migrate
+$ npx mp-migrate@latest
 ```
 as the script runs, it will give you choices about which entities to copy:
 
