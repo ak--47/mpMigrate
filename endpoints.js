@@ -1,119 +1,119 @@
-exports.me = function () {
-    return `https://mixpanel.com/api/app/me`
+exports.me = function (region = `US`) {
+    return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/me`
 }
 
-exports.projectLink = function(project_id, workspace_id) {
-	return `https://mixpanel.com/project/${project_id}/view/${workspace_id}/app/`
+exports.projectLink = function(project_id, workspace_id, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/project/${project_id}/view/${workspace_id}/app/`
 }
 
-exports.getAllDash = function (workSpaceId) {
-    return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
+exports.getAllDash = function (workSpaceId, region = `US`) {
+    return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
 }
 
-exports.getSingleDash = function (workSpaceId, dashId) {
-    return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`
+exports.getSingleDash = function (workSpaceId, dashId, region = `US`) {
+    return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`
 }
 
-exports.getSingleReport = function (workSpaceId, reportId) {
-    return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/bookmarks/${reportId}?v=2`
+exports.getSingleReport = function (workSpaceId, reportId, region = `US`) {
+    return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/bookmarks/${reportId}?v=2`
 }
 
-exports.getSchemas = function (projectId) {
-    return `https://mixpanel.com/api/app/projects/${projectId}/schemas`
+exports.getSchemas = function (projectId, region = `US`) {
+    return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/schemas`
 }
 
-exports.postSchema = function(projectId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/schemas`
+exports.postSchema = function(projectId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/schemas`
 }
 
-exports.makeDash = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
+exports.makeDash = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/`
 }
 
-exports.makeReport =  function(workSpaceId, dashId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`;
-}
-
-
-exports.shareDash = function(projectId, dashId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/dashboards/${dashId}/upsert`
-}
-
-exports.pinDash = function(workSpaceId, dashId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}/pin/`
-}
-
-exports.getCohorts = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
-}
-
-exports.makeCohorts = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
-}
-
-exports.shareCohort = function(projectId, cohortId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/cohorts/${cohortId}/upsert`
-}
-
-exports.deleteCohorts = function(projectId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/cohorts/bulk-delete/`
-}
-
-exports.createCustomEvent = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events/`
+exports.makeReport =  function(workSpaceId, dashId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`;
 }
 
 
+exports.shareDash = function(projectId, dashId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/shared-entities/dashboards/${dashId}/upsert`
+}
 
-exports.getCustomEvents = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
+exports.pinDash = function(workSpaceId, dashId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}/pin/`
+}
+
+exports.getCohorts = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
+}
+
+exports.makeCohorts = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/cohorts/`
+}
+
+exports.shareCohort = function(projectId, cohortId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/shared-entities/cohorts/${cohortId}/upsert`
+}
+
+exports.deleteCohorts = function(projectId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/cohorts/bulk-delete/`
+}
+
+exports.createCustomEvent = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events/`
 }
 
 
-exports.delCustEvent = function(workspaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workspaceId}/data-definitions/events`
+
+exports.getCustomEvents = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/custom_events`
 }
 
-exports.shareCustEvent = function(projectId, custEvId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-events/${custEvId}/upsert`
+
+exports.delCustEvent = function(workspaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workspaceId}/data-definitions/events`
 }
 
-exports.shareCustProp = function(projectId, custPropId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-properties/${custPropId}/upsert`
+exports.shareCustEvent = function(projectId, custEvId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-events/${custEvId}/upsert`
 }
 
-exports.createCustomProp = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
+exports.shareCustProp = function(projectId, custPropId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/shared-entities/custom-properties/${custPropId}/upsert`
 }
 
-exports.getCustomProps = function(workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
+exports.createCustomProp = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
 }
 
-exports.dataDefinitions = function(resourceType, workSpaceId) {
-	return `https://mixpanel.com/api/app/workspaces/${workSpaceId}/data-definitions/properties?resourceType=${resourceType}&includeCustom=true`
+exports.getCustomProps = function(workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/custom_properties`
 }
 
-exports.delCustProp = function(projectId, custPropId) {
-	return `https://mixpanel.com/api/app/projects/${projectId}/custom_properties/${custPropId}`
+exports.dataDefinitions = function(resourceType, workSpaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/workspaces/${workSpaceId}/data-definitions/properties?resourceType=${resourceType}&includeCustom=true`
 }
 
-exports.getMetaData = function(projectId) {
-	return `https://mixpanel.com/settings/project/${projectId}/metadata`
+exports.delCustProp = function(projectId, custPropId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/app/projects/${projectId}/custom_properties/${custPropId}`
 }
 
-exports.getInsightsReport = function(projectId) {
-	return `https://mixpanel.com/api/2.0/insights?project_id=${projectId}`
+exports.getMetaData = function(projectId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/settings/project/${projectId}/metadata`
 }
 
-exports.dataExport = function(start, end) {
-	return `https://data.mixpanel.com/api/2.0/export?from_date=${start}&to_date=${end}`
+exports.getInsightsReport = function(projectId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/2.0/insights?project_id=${projectId}`
 }
 
-exports.profileExport = function(projectId) {
-	return `https://mixpanel.com/api/2.0/engage?project_id=${projectId}`
+exports.dataExport = function(start, end, region = `US`) {
+	return `https://data.${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/2.0/export?from_date=${start}&to_date=${end}`
 }
 
-exports.listCohorts = function(projectId, workspaceId) {
-	return `https://mixpanel.com/api/2.0/cohorts/list?project_id=${projectId}&workspace_id=${workspaceId}`
+exports.profileExport = function(projectId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/2.0/engage?project_id=${projectId}`
+}
+
+exports.listCohorts = function(projectId, workspaceId, region = `US`) {
+	return `https://${region?.toLowerCase() === 'eu' ? "eu." : ""}mixpanel.com/api/2.0/cohorts/list?project_id=${projectId}&workspace_id=${workspaceId}`
 }

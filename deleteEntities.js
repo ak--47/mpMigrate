@@ -9,7 +9,8 @@ require('dotenv').config();
 async function main(target = {
     acct: "",
     pass: "",
-    project: 1234
+    project: 1234,
+	region: `US`
 }) {
 
     log(`👾 DELETE ALL ENTITIES 👾`)
@@ -65,11 +66,11 @@ for project: ${target.project}
 
 `)
 
-    let { acct: username, pass: password, project, workspace } = target
+    let { acct: username, pass: password, project, workspace, region } = target
 
     //delete schema
     log(`deleting schema...`, null, true)
-    let deletedSchema = await fetch(URLs.postSchema(project), {
+    let deletedSchema = await fetch(URLs.postSchema(project, region), {
         method: `delete`,
         auth: { username, password }
     }).catch((e) => {
@@ -79,7 +80,7 @@ for project: ${target.project}
 
     log(`deleting custom events + props...`, null, true);
     for (const custEvent of customEvents) {
-        await fetch(URLs.delCustEvent(workspace), {
+        await fetch(URLs.delCustEvent(workspace, region), {
             method: `delete`,
             auth: { username, password },
             data: { "events": [{ "collectEverythingEventId": null, "customEventId": custEvent.id, "id": 0 }] }
@@ -90,7 +91,7 @@ for project: ${target.project}
     }
 
     for (const custProp of customProps) {
-        await fetch(URLs.delCustProp(project, custProp.customPropertyId), {
+        await fetch(URLs.delCustProp(project, custProp.customPropertyId, region), {
             method: `delete`,
             auth: { username, password },
         }).catch((e) => {
@@ -107,7 +108,7 @@ for project: ${target.project}
     if (targetCohorts.length > 0) {
         log(`deleting ${targetCohorts.length} cohorts...`, null, true)
         let cohortIds = targetCohorts.map(cohort => cohort.id);
-        deletedCohorts = await fetch(URLs.deleteCohorts(project), {
+        deletedCohorts = await fetch(URLs.deleteCohorts(project, region), {
             method: `post`,
             auth: { username, password },
             data: { cohort_ids: cohortIds }
@@ -122,7 +123,7 @@ for project: ${target.project}
     log(`deleting ${targetDashes.length} dashboards...`, null, true)
     let deletedDashboards = [];
     for (const dash of targetDashes) {
-        let deletedDashboard = await fetch(URLs.getSingleDash(workspace, dash.id), {
+        let deletedDashboard = await fetch(URLs.getSingleDash(workspace, dash.id, region), {
             method: `delete`,
             auth: { username, password }
         })

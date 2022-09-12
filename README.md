@@ -28,20 +28,24 @@ this software can be [run as a CLI](#CLI) (using environment variables) or imple
 currently **not** supported:
 
  - nested saved entities (e.g. cohorts within cohorts)
- - user project permissions
+ - copying data views + settings
+ - user invites
  - session/group keys/timezone and other global project settings
  - saved entity permissions (defaults to global access to all users)
+ - text cards on dashboards
 
 ## tldr;
 supply credentials:
 ```bash
-$ echo "SOURCE_ACCT = '{{ OLD project service account }}'
+echo "SOURCE_ACCT = '{{ OLD project service account }}'
 SOURCE_PASS = '{{ OLD project service secret }}'
 SOURCE_PROJECT = '{{ OLD project id }}'
 SOURCE_DATE = '{{ date of first event in OLD project, eg... 04-20-2022 }}'
+SOURCE_REGION = 'US'
 TARGET_ACCT = '{{ NEW project service account }}'
 TARGET_PASS = '{{ NEW project secret }}'
-TARGET_PROJECT = '{{ NEW project id }}'" > .env
+TARGET_PROJECT = '{{ NEW project id }}'
+TARGET_REGION = 'US'" > .env
 ```
 
 then migrate
@@ -65,9 +69,11 @@ SOURCE_ACCT = ''  #service account username for the source project
 SOURCE_PASS = ''  #service account secret for the source project
 SOURCE_PROJECT = ''  #source project's ID
 SOURCE_DATE = ''  #the start date (if you're copying events)
+SOURCE_REGION = 'US' #either US or EU based on project's region; optional if US 
 TARGET_ACCT = ''  #service account username for target project
 TARGET_PASS = ''  #service account secret for target project
 TARGET_PROJECT = ''  #target project's ID
+TARGET_REGION = 'EU' #mandatory if project uses EU residency
 ```
 with that configuration file present in the same directory, you can then run:
 ```bash
@@ -100,12 +106,14 @@ let source = {
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
 	project: 12345,
-	start: "04-20-2022" //date of first event
+	region: "US",
+	start: "04-20-2022" //date of first event	
 }
 let target = {
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
-	project: 67890
+	project: 67890,
+	region: "EU"
 }
 
 //copy project 12345 to project 67890
@@ -120,7 +128,6 @@ you can pass a third `options` object to the module of the form:
 let options = {
 	transformEventsFunc: x => x, // will be called on every event
 	transformProfilesFunc: x => x, // will be called on every profile
-	isEU: false, //for EU-only projects
 	shouldGenerateSummary: false, //generate a summary of the source project?
 	shouldCopyEvents: false, //copy events from source to target?
 	shouldCopyProfiles: false, //copy user profiles from source to target?
@@ -129,7 +136,7 @@ let options = {
 
 const migrateProjects = await projectCopy(source, target, options)
 ```
-specifying many of these options upfront skip the user prompts.
+specifying all of these options upfront will skip the user prompts.
 
 
 
@@ -145,7 +152,8 @@ let target = {
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
 	project: 12345,
+	region: `US`
 }
 let result = await entityDelete(target)
 ```
-i'm serious... there's no way to undo this.
+i'm serious... there's no way to undo this. unfortunutely this will not not delete events or profiles in the project.

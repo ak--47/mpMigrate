@@ -17,16 +17,20 @@ const { URLSearchParams } = require('url')
 // AUTH + PERSISTENCE
 exports.getEnvCreds = function () {
     //sweep .env to pickup creds
-    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`)
-    const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`)
-    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE: "start" }
-    const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project" }
+    const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`, `SOURCE_REGION`)
+    const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`)
+    const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE: "start", SOURCE_REGION: "region" }
+    const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" }
     const envCredsSource = renameKeys(envVarsSource, sourceKeyNames)
     const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames)
 
     if (dayjs(envCredsSource.start).isValid()) {
         envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat)
     }
+
+	// region defaults
+	if (!envCredsSource.region) envCredsSource.region = `US`
+	if (!envCredsTarget.region) envCredsTarget.region = `US`
 
     return {
         envCredsSource,
@@ -36,8 +40,8 @@ exports.getEnvCreds = function () {
 }
 
 exports.validateServiceAccount = async function (creds) {
-    let { acct: username, pass: password, project } = creds
-    let res = (await fetch(URLs.me(), {
+    let { acct: username, pass: password, project, region } = creds
+    let res = (await fetch(URLs.me(region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -89,7 +93,7 @@ exports.validateServiceAccount = async function (creds) {
     globalView[0].projId = project
 
     // get project metadata
-    let metaData = (await fetch(URLs.getMetaData(project), {
+    let metaData = (await fetch(URLs.getMetaData(project, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -192,19 +196,19 @@ exports.userPrompt = async function (source, target, shouldContinue) {
     const promptSchema = {
         properties: {
             generateSummary: {
-                description: `do you want to generate a summary of project ${source.project}'s saved entities?`,
+                description: `do you want to generate a TEXT SUMMARY of project ${source.project}'s saved entities?`,
                 ...defaults
             },
             copyEvents: {
-                description: `do you want to copy events from project ${source.project} to project ${target.project}?`,
+                description: `do you want to COPY EVENTS from project ${source.project} to project ${target.project}?`,
                 ...defaults
             },
             copyProfiles: {
-                description: `do you want to copy profiles from project ${source.project} to project ${target.project}?`,
+                description: `do you want to COPY PROFILES from project ${source.project} to project ${target.project}?`,
                 ...defaults
             },
             copyEntities: {
-                description: `do you want to copy saved entities from project ${source.project} to project ${target.project}?`,
+                description: `do you want to COPY SAVED ENTITIES from project ${source.project} to project ${target.project}?`,
                 ...defaults
             }
         }
@@ -253,8 +257,8 @@ exports.userPrompt = async function (source, target, shouldContinue) {
 
 // GETTERS
 exports.getCohorts = async function (creds) {
-    let { acct: username, pass: password, workspace } = creds
-    let res = (await fetch(URLs.getCohorts(workspace), {
+    let { acct: username, pass: password, workspace, region } = creds
+    let res = (await fetch(URLs.getCohorts(workspace, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -268,8 +272,8 @@ exports.getCohorts = async function (creds) {
 }
 
 exports.getAllDash = async function (creds) {
-    let { acct: username, pass: password, workspace } = creds
-    let res = (await fetch(URLs.getAllDash(workspace), {
+    let { acct: username, pass: password, workspace, region } = creds
+    let res = (await fetch(URLs.getAllDash(workspace, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -283,8 +287,8 @@ exports.getAllDash = async function (creds) {
 }
 
 exports.getDashReports = async function (creds, dashId) {
-    let { acct: username, pass: password, workspace } = creds
-    let res = (await fetch(URLs.getSingleDash(workspace, dashId), {
+    let { acct: username, pass: password, workspace, region } = creds
+    let res = (await fetch(URLs.getSingleDash(workspace, dashId, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -298,8 +302,8 @@ exports.getDashReports = async function (creds, dashId) {
 }
 
 exports.getSchema = async function (creds) {
-    let { acct: username, pass: password, project } = creds
-    let res = (await fetch(URLs.getSchemas(project), {
+    let { acct: username, pass: password, project, region } = creds
+    let res = (await fetch(URLs.getSchemas(project, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -314,8 +318,8 @@ exports.getSchema = async function (creds) {
 }
 
 exports.getCustomEvents = async function (creds) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.getCustomEvents(workspace), {
+    let { acct: username, pass: password, project, workspace, region } = creds
+    let res = (await fetch(URLs.getCustomEvents(workspace, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -328,8 +332,8 @@ exports.getCustomEvents = async function (creds) {
 
 }
 exports.getCustomProps = async function (creds) {
-    let { acct: username, pass: password, project, workspace } = creds
-    let res = (await fetch(URLs.getCustomProps(workspace), {
+    let { acct: username, pass: password, project, workspace, region } = creds
+    let res = (await fetch(URLs.getCustomProps(workspace, region), {
         auth: { username, password }
     }).catch((e) => {
         creds;
@@ -367,7 +371,7 @@ exports.getCustomProps = async function (creds) {
 
 // SETTERS
 exports.postSchema = async function (creds, schema) {
-    let { acct: username, pass: password, project } = creds
+    let { acct: username, pass: password, project, region } = creds
 
     schema = schema.filter(e => !e.entityType.includes('custom'))
 
@@ -382,7 +386,7 @@ exports.postSchema = async function (creds, schema) {
 
     let extraParams = { "truncate": true }
     let params = { entries: schema, ...extraParams }
-    let res = await fetch(URLs.postSchema(project), {
+    let res = await fetch(URLs.postSchema(project, region), {
         method: `post`,
         auth: { username, password },
         data: params
@@ -399,7 +403,7 @@ exports.postSchema = async function (creds, schema) {
 
 //TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
-    let { acct: username, pass: password, workspace, project } = targetCreds
+    let { acct: username, pass: password, workspace, project, region } = targetCreds
     let results = [];
 
     // //match old and new custom entities
@@ -425,7 +429,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
         delete cohort.is_superadmin
         delete cohort.can_share
 
-        let createdCohort = await fetch(URLs.makeCohorts(workspace), {
+        let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
             method: `post`,
             auth: { username, password },
             data: cohort
@@ -458,7 +462,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 }
 
 exports.makeCustomProps = async function (creds, custProps) {
-    let { acct: username, pass: password, project, workspace } = creds
+    let { acct: username, pass: password, project, workspace, region } = creds
     let results = [];
     let customProperties = clone(custProps)
     loopCustomProps: for (const custProp of customProperties) {
@@ -489,7 +493,7 @@ exports.makeCustomProps = async function (creds, custProps) {
         custProp.global_access_type = "on"
 
         //make the dashboard; get back id
-        let createdCustProp = await fetch(URLs.createCustomProp(workspace), {
+        let createdCustProp = await fetch(URLs.createCustomProp(workspace, region), {
             method: `post`,
             auth: { username, password },
             data: custProp
@@ -509,7 +513,7 @@ exports.makeCustomProps = async function (creds, custProps) {
             continue loopCustomProps;
         } else {
             // share custom event
-            await fetch(URLs.shareCustProp(project, customProp.customPropertyId), {
+            await fetch(URLs.shareCustProp(project, customProp.customPropertyId, region), {
                 method: 'post',
                 auth: { username, password },
                 data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
@@ -524,7 +528,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 
 //TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
 exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
-    let { acct: username, pass: password, project, workspace } = creds
+    let { acct: username, pass: password, project, workspace, region } = creds
     let results = [];
 
     // //match old and new custom entities
@@ -541,7 +545,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
         custPayload.append('alternatives', JSON.stringify(alternatives));
         let headers = custPayload.getHeaders();
 
-        let createdCustEvent = await fetch(URLs.createCustomEvent(workspace), {
+        let createdCustEvent = await fetch(URLs.createCustomEvent(workspace, region), {
             method: 'post',
             auth: { username, password },
             headers,
@@ -563,7 +567,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
             continue loopCustomEvents;
         } else {
             // share custom event
-            await fetch(URLs.shareCustEvent(project, customEvent?.id), {
+            await fetch(URLs.shareCustEvent(project, customEvent?.id, region), {
                 method: 'post',
                 auth: { username, password },
                 data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
@@ -578,7 +582,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 
 //TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
-    let { acct: username, pass: password, project, workspace } = targetCreds
+    let { acct: username, pass: password, project, workspace, region } = targetCreds
 
     let results = {
         dashes: [],
@@ -646,7 +650,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
         dash.global_access_type = "on"
 
         //make the dashboard; get back id
-        let createdDash = await fetch(URLs.makeDash(workspace), {
+        let createdDash = await fetch(URLs.makeDash(workspace, region), {
             method: `post`,
             auth: { username, password },
             data: dash
@@ -675,7 +679,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
         //update shares
         let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
-        let sharedDash = await fetch(URLs.shareDash(project, dashId), {
+        let sharedDash = await fetch(URLs.shareDash(project, dashId, region), {
             method: `post`,
             auth: { username, password },
             data: sharePayload
@@ -689,7 +693,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
         results.shares.push(sharedDash);
 
         //pin dashboards
-        let pinnedDash = await fetch(URLs.pinDash(workspace, dashId), {
+        let pinnedDash = await fetch(URLs.pinDash(workspace, dashId, region), {
             method: `post`,
             auth: { username, password },
             data: {}
@@ -710,7 +714,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 exports.exportAllEvents = async function (source) {
     const startDate = dayjs(source.start).format(dateFormat)
     const endDate = dayjs().format(dateFormat);
-    const url = URLs.dataExport(startDate, endDate)
+    const url = URLs.dataExport(startDate, endDate, source?.region)
     const file = path.resolve(`${source.localPath}/exports/events.ndjson`)
     const writer = createWriteStream(file);
     const auth = Buffer.from(source.secret + '::').toString('base64')
@@ -741,7 +745,7 @@ exports.exportAllProfiles = async function (source, target) {
     let file = path.resolve(`${folder}/${fileName}`)
     let response = (await fetch({
         method: 'POST',
-        url: URLs.profileExport(source.projId),
+        url: URLs.profileExport(source.projId, source?.region),
         headers: {
             Authorization: `Basic ${auth}`
         },
@@ -779,7 +783,7 @@ exports.exportAllProfiles = async function (source, target) {
 
         response = (await fetch({
             method: 'POST',
-            url: URLs.profileExport(source.projId),
+            url: URLs.profileExport(source.projId, source?.region),
             headers: {
                 Authorization: `Basic ${auth}`
             },
@@ -861,7 +865,7 @@ exports.sendProfiles = async function (source, target, transform) {
 
 // UTILS
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts) {
-    let { acct: username, pass: password, project, workspace, dashId } = creds
+    let { acct: username, pass: password, project, workspace, dashId, region } = creds
     let results = [];
     loopReports: for (const report of reports) {
         let failed = false;
@@ -912,7 +916,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
             }
         }
 
-        let createdReport = await fetch(URLs.makeReport(workspace, dashId), {
+        let createdReport = await fetch(URLs.makeReport(workspace, dashId, region), {
             method: `patch`,
             auth: { username, password },
             data: payload
@@ -982,8 +986,8 @@ const matchCustomEntities = async function (sourceCreds, sourceEntities, targetE
     let sourceCohortList = [];
 
     if (sourceCreds) {
-        const { projId, workspace, acct, pass } = sourceCreds
-        sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace), {
+        const { projId, workspace, acct, pass, region } = sourceCreds
+        sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
             method: `POST`,
             auth: { username: acct, password: pass }
         })).data
@@ -1196,7 +1200,7 @@ exports.getProjCount = async function (source, type) {
 
     const opts = {
         method: 'POST',
-        url: URLs.getInsightsReport(source.project),
+        url: URLs.getInsightsReport(source.project, source?.region),
         headers: {
             Accept: 'application/json'
 
@@ -1237,6 +1241,8 @@ exports.comma = function (x) {
 exports.writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
 }
+
+
 
 // SUMMARIES
 exports.saveLocalSummary = async function (projectMetaData) {

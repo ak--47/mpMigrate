@@ -17,17 +17,18 @@ async function main(
 		acct: "",
 		pass: "",
 		project: 1234,
-		start: `01-01-2022`
+		start: `01-01-2022`,
+		region: `US`
 	},
 	target = {
 		acct: "",
 		pass: "",
-		project: 1234
+		project: 1234,
+		region : `US`
 	},
 	opts = {
 		transformEventsFunc: x => x,
 		transformProfilesFunc: x => x,
-		isEU: false,
 		shouldGenerateSummary: null,
 		shouldCopyEvents: null,
 		shouldCopyProfiles: null,
@@ -35,7 +36,7 @@ async function main(
 	}) {
 
 	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
-		(by AK) v1.07
+		(by AK) v1.08
 
 this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`);
 	const { envCredsSource, envCredsTarget } = u.getEnvCreds();
@@ -43,17 +44,23 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	//choose creds based on .env or params
 	if (source.acct === '' && source.pass === '') {
 		source = envCredsSource;
-		log(`using .env for source credentials`);
+		log(`attempting to use .env for source credentials`);
 	}
 
 	if (target.acct === '' && target.pass === '') {
 		target = envCredsTarget;
-		log(`using .env for target credentials`);
+		log(`attempting to use .env for target credentials`);
+	}
+
+	if (isNotSet(source.acct) || isNotSet(source.pass)) {
+		log(`	⚠️ ERROR: you did not specify service account credentials for your source project ⚠️`)
+		log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`)
+		process.exit(0)
 	}
 
 	//options
 	let generateSummary, copyEvents, copyProfiles, copyEntities;
-	const { transformEventsFunc, transformProfilesFunc, isEU, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts;
+	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts;
 
 	//PROMPT USER FOR OPTIONS (if not specified)
 	if (isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
