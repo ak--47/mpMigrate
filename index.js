@@ -6,6 +6,8 @@
 // https://github.com/ak--47/mpMigrate
 // 
 
+//todo: local time to project time
+
 require('dotenv').config();
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');

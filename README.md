@@ -27,6 +27,7 @@ this software can be [run as a CLI](#CLI) (using environment variables) or imple
 
 currently **not** supported:
 
+ - identity resolution (mapping `anon_id`s to `known_id`s) 
  - nested saved entities (e.g. cohorts within cohorts)
  - copying data views + settings
  - user invites
