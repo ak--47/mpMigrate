@@ -1242,18 +1242,35 @@ exports.writeFile = async function (filename, data) {
     await fs.writeFile(filename, data);
 }
 
+const openExplorerinMac = function (path, callback) {
+    path = path || '/';
+    let p = spawn('open', [path]);
+    p.on('error', (err) => {
+        p.kill();
+        return callback(err);
+    });
+}
 
 
 // SUMMARIES
 exports.saveLocalSummary = async function (projectMetaData) {
     const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData
     const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
-    const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary)
+    const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary)	
     const writeSchema = await writeFile(path.resolve(`${source.localPath}/payloads/schema.json`), json(schema))
     const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/payloads/customEvents.json`), json(customEvents))
     const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/payloads/customProps.json`), json(customProps))
     const writeCohorts = await writeFile(path.resolve(`${source.localPath}/payloads/cohorts.json`), json(cohorts))
     const writeDashes = await writeFile(path.resolve(`${source.localPath}/payloads/dashboards.json`), json(dashes))
+
+	//reveal the folder
+	try {		
+		openExplorerinMac(path.resolve(`${source.localPath}`))
+	}
+
+	catch (e) {
+
+	}
 }
 
 const makeSummary = async function (projectMetaData) {
