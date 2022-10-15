@@ -502,6 +502,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 		delete cohort.allow_staff_override;
 		delete cohort.is_superadmin;
 		delete cohort.can_share;
+		delete cohort.can_update_restricted;
 
 		let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
 			method: `post`,
@@ -707,6 +708,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		delete dash.is_superadmin;
 		delete dash.can_share;
 		delete dash.can_pin_dashboards;
+		delete dash['can_update_restricted'];
+		delete dash['can_update_visibility'];
+		delete dash['created'];
 
 		//get rid of null keys
 		for (let key in dash) {
@@ -969,6 +973,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 		delete report.can_share;
 		delete report.allow_staff_override;
 		delete report.is_superadmin;
+		delete report.can_update_restricted;
 
 		//null values make mixpanel unhappy; delete them too
 		for (let key in report) {
@@ -1292,9 +1297,9 @@ exports.getProjCount = async function (source, type) {
 		resTotal = await fetch(opts);
 
 		if (type === `events`) {
-			return resTotal.data.series["All Events - Total"].all;
+			return resTotal.data.series["All Events - Total"]?.all;
 		} else if (type === `profiles`) {
-			return resTotal.data.series["All User Profiles - Total"].value;
+			return resTotal.data.series["All User Profiles - Total"]?.value;
 		}
 
 	} catch (e) {
