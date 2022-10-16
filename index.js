@@ -26,7 +26,7 @@ async function main(
 		acct: "",
 		pass: "",
 		project: 1234,
-		region : `US`
+		region: `US`
 	},
 	opts = {
 		transformEventsFunc: x => x,
@@ -55,9 +55,9 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	}
 
 	if (isNotSet(source.acct) || isNotSet(source.pass)) {
-		log(`	⚠️ ERROR: you did not specify service account credentials for your source project ⚠️`)
-		log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`)
-		process.exit(0)
+		log(`	⚠️ ERROR: you did not specify service account credentials for your source project ⚠️`);
+		log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`);
+		process.exit(0);
 	}
 
 	//options
