@@ -1,4 +1,5 @@
 const URLs = require('./endpoints.js');
+const blacklistKeys = URLs.blacklistKeys;
 const fetch = require('axios').default;
 const FormData = require('form-data');
 const fs = require('fs').promises;
@@ -488,21 +489,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 	createCohorts: for (const cohort of cohorts) {
 		let failed = false;
 		//get rid of disallowed keys
-		delete cohort.count;
-		delete cohort.created_by;
-		delete cohort.data_group_id;
-		delete cohort.id;
-		delete cohort.last_edited;
-		delete cohort.last_queried;
-		delete cohort.referenced_by;
-		delete cohort.referenced_directly_by;
-		delete cohort.active_integrations;
-		delete cohort.can_update_basic;
-		delete cohort.can_view;
-		delete cohort.allow_staff_override;
-		delete cohort.is_superadmin;
-		delete cohort.can_share;
-		delete cohort.can_update_restricted;
+		blacklistKeys.forEach(key => delete cohort[key]);
 
 		let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
 			method: `post`,
@@ -542,20 +529,9 @@ exports.makeCustomProps = async function (creds, custProps) {
 	let customProperties = clone(custProps);
 	loopCustomProps: for (const custProp of customProperties) {
 		let failed = false;
-		//get rid of disallowed keys       
-		delete custProp.user;
-		delete custProp.created;
-		delete custProp.customPropertyId;
-		delete custProp.allow_staff_override;
-		delete custProp.can_share;
-		delete custProp.can_update_basic;
-		delete custProp.can_view;
-		delete custProp.canUpdateBasic;
-		delete custProp.modified;
-		delete custProp.referencedBy;
-		delete custProp.referencedDirectlyBy;
-		delete custProp.referencedRawEventProperties;
-		delete custProp.project;
+		//get rid of disallowed keys 
+		blacklistKeys.forEach(key => delete custProp[key]);
+
 
 		//get rid of null keys
 		for (let key in custProp) {
@@ -688,29 +664,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		}
 
 		//get rid of disallowed keys (this is backwards; u shuld whitelist)
-		delete dash.SAVED_REPORTS;
-		delete dash.id;
-		delete dash.is_private;
-		delete dash.creator;
-		delete dash.creator_id;
-		delete dash.creator_name;
-		delete dash.creator_email;
-		delete dash.is_restricted;
-		delete dash.modified;
-		delete dash.is_favorited;
-		delete dash.pinned_date;
-		delete dash.generation_type;
-		delete dash.layout_version;
-		delete dash.can_see_grid_chameleon;
-		delete dash.can_update_basic;
-		delete dash.can_view;
-		delete dash.allow_staff_override;
-		delete dash.is_superadmin;
-		delete dash.can_share;
-		delete dash.can_pin_dashboards;
-		delete dash['can_update_restricted'];
-		delete dash['can_update_visibility'];
-		delete dash['created'];
+		blacklistKeys.forEach(key => delete dash[key]);
 
 		//get rid of null keys
 		for (let key in dash) {
@@ -787,6 +741,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	return results;
 };
 
+exports.adjustLayout = async function (sourceCreds, targetCreds, sourceDash, targetDash) {
+
+};
 
 // EXPORT
 exports.exportAllEvents = async function (source) {
@@ -951,29 +908,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 		report.global_access_type = "on";
 
 		//get rid of disallowed keys
-		delete report.id;
-		delete report.project_id;
-		delete report.workspace_id;
-		delete report.original_type;
-		delete report.include_in_dashboard;
-		delete report.is_default;
-		delete report.creator;
-		delete report.creator_id;
-		delete report.creator_name;
-		delete report.creator_email;
-		delete report.generation_type;
-		delete report.created;
-		delete report.modified;
-		delete report.metadata;
-		delete report.dashboard;
-		delete report.is_visibility_restricted;
-		delete report.is_modification_restricted;
-		delete report.can_update_basic;
-		delete report.can_view;
-		delete report.can_share;
-		delete report.allow_staff_override;
-		delete report.is_superadmin;
-		delete report.can_update_restricted;
+		blacklistKeys.forEach(key => delete report[key]);
 
 		//null values make mixpanel unhappy; delete them too
 		for (let key in report) {
