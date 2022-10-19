@@ -131,7 +131,13 @@ const layout = { "layout": { "rows": [{ "height": 0, "cells": [{ "id": "fEGqmELw
 
 // blacklisted keys
 exports.blacklistKeys = [
+	"TEXT",
+	"MEDIA",
+	"LAYOUT",
     "SAVED_REPORTS",
+	'last_modified_by_name',
+	'last_modified_by_id',
+	'last_modified_by_email',
     "id",
     "is_private",
     "creator",

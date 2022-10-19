@@ -8,7 +8,8 @@
     "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --inspect scratch.js",
     "delete": "MODE=delete node scratch.js",
     "prune": "rm -rf ./savedProjects/*",
-    "upload": "npm publish"
+    "upload": "npm publish",
+	"scratch": "nodemon --inspect scratch.js"
   },
   "bin": {
     "mp-migrate": "./index.js"

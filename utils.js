@@ -18,9 +18,9 @@ const { URLSearchParams } = require('url');
 // AUTH + PERSISTENCE
 exports.getEnvCreds = function () {
 	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`, `SOURCE_REGION`);
+	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`);
 	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE: "start", SOURCE_REGION: "region" };
+	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region" };
 	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" };
 	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
 	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
@@ -29,9 +29,23 @@ exports.getEnvCreds = function () {
 		envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat);
 	}
 
+	else {
+		envCredsSource.start = dayjs().format(dateFormat);
+	}
+
+	if (dayjs(envCredsSource.end).isValid()) {
+		envCredsSource.end = dayjs(envCredsSource.end).format(dateFormat);
+	}
+
+	else {
+		envCredsSource.end = dayjs().format(dateFormat);
+	}
+
 	// region defaults
 	if (!envCredsSource.region) envCredsSource.region = `US`;
 	if (!envCredsTarget.region) envCredsTarget.region = `US`;
+
+
 
 	return {
 		envCredsSource,
@@ -351,10 +365,22 @@ exports.getDashReports = async function (creds, dashId) {
 		else {
 			process.exit(1);
 		}
-	})).data;
+	})).data?.results;
+
+	const dashSummary = {
+		reports: res.contents.report,
+		media: res.contents.media,
+		text: res.contents.text,
+		layout: res.layout
+
+	};
+
+	return dashSummary;
 
 	return res.results.contents.report;
 };
+
+
 
 exports.getSchema = async function (creds) {
 	let { acct: username, pass: password, project, region } = creds;
@@ -499,13 +525,13 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 		}).catch((e) => {
 			failed = true;
 			cohort;
-			debugger;
 			console.error(`ERROR CREATING COHORT!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 		});
 
-		results.push(createdCohort.data.results);
+		results.push(createdCohort?.data?.results);
 
 		if (failed) {
 			continue createCohorts;
@@ -552,9 +578,10 @@ exports.makeCustomProps = async function (creds, custProps) {
 		}).catch((e) => {
 			failed = true;
 			custProp;
-			debugger;
+
 			console.error(`ERROR MAKING CUST PROP! ${custProp.name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 
 		});
@@ -604,9 +631,9 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 		}).catch((e) => {
 			failed = true;
 			name;
-			debugger;
 			console.error(`ERROR MAKING CUST EVENT! ${name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 		});
 
@@ -655,12 +682,24 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		newDashes = substitue(dashes);
 	}
 
+	if (!newDashes) newDashes = dashes;
+
 	loopDash: for (const dash of newDashes) {
 		let failed = false;
 		//copy all child reports metadatas
-		let reports = [];
+		const reports = [];
+		const media = [];
+		const text = [];
+		const layout = dash.LAYOUT
+		
 		for (let reportId in dash.SAVED_REPORTS) {
 			reports.push(dash.SAVED_REPORTS[reportId]);
+		}
+		for (let mediaId in dash.MEDIA) {
+			media.push(dash.MEDIA[mediaId]);
+		}
+		for (let textId in dash.TEXT) {
+			text.push(dash.TEXT[textId]);
 		}
 
 		//get rid of disallowed keys (this is backwards; u shuld whitelist)
@@ -693,9 +732,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			dash;
 			results;
 			matchedEntities;
-			debugger;
 			console.error(`ERROR MAKING DASH! ${dash.title}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 
 		});
@@ -706,8 +745,11 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		//use dash id to make reports
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
+		//TODO: make text + media cards
 		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts);
 		results.reports.push(createdReports);
+
+		//TODO update layout
 
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
@@ -1086,7 +1128,7 @@ const clone = function (thing, opts) {
 // QUERY
 exports.getProjCount = async function (source, type) {
 	const startDate = dayjs(source.start).format(dateFormat);
-	const endDate = dayjs().format(dateFormat);
+	const endDate = dayjs(source.end).format(dateFormat);
 	let payload;
 	if (type === `events`) {
 		payload = {

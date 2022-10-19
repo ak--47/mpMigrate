@@ -12,14 +12,16 @@ require('dotenv').config();
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');
 let logs = ``;
-
+const dayjs = require('dayjs');
+const dateFormat = `YYYY-MM-DD`;
 
 async function main(
 	source = {
 		acct: "",
 		pass: "",
 		project: 1234,
-		start: `01-01-2022`,
+		start : dayjs().format(dateFormat),
+		end : dayjs().format(dateFormat),
 		region: `US`
 	},
 	target = {
@@ -34,8 +36,12 @@ async function main(
 		shouldGenerateSummary: null,
 		shouldCopyEvents: null,
 		shouldCopyProfiles: null,
-		shouldCopyEntities: null
+		shouldCopyEntities: null,
+		silent: false,
+		skipPrompt: false,		
 	}) {
+	
+	global.SILENT = opts.silent || false
 
 	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
 		(by AK) v1.08
@@ -91,7 +97,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 
 	// get all events
 	if (copyEvents || generateSummary) {
-		log(`querying project for events since ${source.start}`, null, true);
+		log(`querying project for events since ${source.start} to ${source.end}`, null, true);
 		numEvents = await u.getProjCount(source, `events`);
 		log(`	... 👍 found ${u.comma(numEvents)} events`);
 	}
@@ -132,12 +138,16 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 		log(`querying reports metadata...`, null, true);
 		sourceFoundReports = 0;
 		for (const [index, dash] of sourceDashes.entries()) {
-			let dashReports = await u.getDashReports(source, dash.id);
-			sourceFoundReports += Object.keys(dashReports).length;
+			let dashMeta = await u.getDashReports(source, dash.id);
+			sourceFoundReports += Object.keys(dashMeta.reports).length;
 
 			//store report metadata for later
-			sourceDashes[index].SAVED_REPORTS = dashReports;
-
+			sourceDashes[index].SAVED_REPORTS = dashMeta.reports;
+			// TODO: adjust TEXT, MEDIA, and LAYOUT
+			sourceDashes[index].MEDIA = dashMeta.media
+			sourceDashes[index].TEXT = dashMeta.text
+			sourceDashes[index].LAYOUT = dashMeta.layout
+		
 		}
 		log(`	... 👍 found ${u.comma(sourceFoundReports)} reports`);
 
@@ -188,7 +198,7 @@ ${intentString}
 from project: ${source.project} to project: ${target.project}	
 
 `);
-	let shouldContinue = await u.userPrompt(null, null, true);
+	let shouldContinue = opts.skipPrompt ? true : await u.userPrompt(null, null, true);
 
 	if (!shouldContinue) {
 		log(`aborting...`);
@@ -311,7 +321,9 @@ from project: ${source.project} to project: ${target.project}
 
 
 function log(message, data, hasResponse = false) {
-
+	if (SILENT) {
+		return;
+	}
 	if (message) {
 		console.log(message);
 		logs += `${message}`;
