@@ -34,7 +34,6 @@ exports.makeReport = function (workSpaceId, dashId, region = `US`) {
 	return `https://${getRegion(region)}mixpanel.com/api/app/workspaces/${workSpaceId}/dashboards/${dashId}`;
 };
 
-
 exports.shareDash = function (projectId, dashId, region = `US`) {
 	return `https://${getRegion(region)}mixpanel.com/api/app/projects/${projectId}/shared-entities/dashboards/${dashId}/upsert`;
 };
@@ -118,9 +117,7 @@ exports.listCohorts = function (projectId, workspaceId, region = `US`) {
 	return `https://${getRegion(region)}mixpanel.com/api/2.0/cohorts/list?project_id=${projectId}&workspace_id=${workspaceId}`;
 };
 
-exports.makeTextCard = function (workspaceId, dashId) {
-	return `https://${getRegion(region)}mixpanel.com/api/app/workspaces/${workspaceId}/dashboards/${dashId}`;
-};
+
 
 function getRegion(region = 'US') {
 	return `${region?.toLowerCase() === 'eu' ? "eu." : ""}`;
@@ -134,7 +131,8 @@ exports.blacklistKeys = [
 	"TEXT",
 	"MEDIA",
 	"LAYOUT",
-    "SAVED_REPORTS",
+    "REPORTS",
+	"dashboard_id",
 	'last_modified_by_name',
 	'last_modified_by_id',
 	'last_modified_by_email',

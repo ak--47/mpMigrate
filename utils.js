@@ -666,7 +666,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		dashes: [],
 		reports: [],
 		shares: [],
-		pins: []
+		pins: [],
+		text: [],
+		media: []
 	};
 
 	//match old and new custom entities by subbing olds Ids for new ones
@@ -690,10 +692,10 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const reports = [];
 		const media = [];
 		const text = [];
-		const layout = dash.LAYOUT
-		
-		for (let reportId in dash.SAVED_REPORTS) {
-			reports.push(dash.SAVED_REPORTS[reportId]);
+		const layout = dash.LAYOUT;
+
+		for (let reportId in dash.REPORTS) {
+			reports.push(dash.REPORTS[reportId]);
 		}
 		for (let mediaId in dash.MEDIA) {
 			media.push(dash.MEDIA[mediaId]);
@@ -739,17 +741,22 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
 		});
 		results.dashes.push(createdDash?.data?.results);
+		
 		if (failed) {
 			continue loopDash;
 		}
+		
 		//use dash id to make reports
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
-		//TODO: make text + media cards
 		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts);
+		const createdMedia = await makeMedia(targetCreds, media);
+		const createdText = await makeText(targetCreds, text);
 		results.reports.push(createdReports);
+		results.media.push(createdMedia);
+		results.text.push(createdText);
 
-		//TODO update layout
+		//TODO UPDATE LAYOUT
 
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
@@ -780,12 +787,12 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	}
 
 	results.reports = results.reports.flat();
+	results.media = results.media.flat();
+	results.text = results.text.flat();
 	return results;
 };
 
-exports.adjustLayout = async function (sourceCreds, targetCreds, sourceDash, targetDash) {
 
-};
 
 // EXPORT
 exports.exportAllEvents = async function (source) {
@@ -941,6 +948,148 @@ exports.sendProfiles = async function (source, target, transform) {
 
 
 // UTILS
+const makeMedia = async function (creds, media = []) {
+	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let results = [];
+	loopMedia: for (const mediaItem of media) {
+		let failed = false;
+
+		const mediaCreate = { "content": { "action": "create", "content_type": "media", "content_params": { "media_type": "", "service": "", "path": "" } } };
+		const createMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: mediaCreate
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			mediaItem;
+			results;
+			debugger;
+			console.error(`ERROR CREATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			return {};
+		});
+
+		if (failed) continue loopMedia;
+		const createdMediaCardId = createMediaCard.data.results.new_content.id;
+
+		//get rid of disallowed keys
+		blacklistKeys.forEach(key => delete mediaItem[key]);
+
+		//null values make mixpanel unhappy; delete them too
+		for (let key in mediaItem) {
+			if (mediaItem[key] === null) {
+				delete mediaItem[key];
+			}
+		}
+
+		const payload = {
+			"content":
+			{
+				"action": "update",
+				"content_id": createdMediaCardId,
+				"content_type": "media",
+				"content_params": mediaItem
+			}
+		};
+
+		let updatedMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: payload
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			results;
+			console.error(`ERROR UPDATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+		results.push(updatedMediaCard);
+		if (failed) {
+			continue loopMedia;
+		}
+	}
+
+
+	return results;
+};
+
+const makeText = async function (creds, text = []) {
+	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let results = [];
+	loopText: for (const textCard of text) {
+		let failed = false;
+
+		const textCreate = { "content": { "action": "create", "content_type": "text", "content_params": { "markdown": "" } } };
+		const createTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: textCreate
+
+		}).catch((e) => {
+			failed = true;			
+			textCard;
+			results;			
+			console.error(`ERROR CREATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+
+		if (failed) continue loopText;
+		const createdTextCardId = createTextCard.data.results.new_content.id;
+
+		//get rid of disallowed keys
+		blacklistKeys.forEach(key => delete textCard[key]);
+
+		//null values make mixpanel unhappy; delete them too
+		for (let key in textCard) {
+			if (textCard[key] === null) {
+				delete textCard[key];
+			}
+		}
+
+		const payload = {
+			"content":
+			{
+				"action": "update",
+				"content_id": createdTextCardId,
+				"content_type": "text",
+				"content_params": textCard
+			}
+		};
+
+		let updatedTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: payload
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			results;
+			console.error(`ERROR UPDATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+		results.push(updatedTextCard);
+		if (failed) {
+			continue loopText;
+		}
+	}
+
+	return results;
+};
+
+const adjustLayout = async function (creds, layout = {}) {
+
+};
+
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
@@ -1415,11 +1564,11 @@ ${summary}\n\n`;
 };
 
 const makeDashSummary = function (dashes) {
-	dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+	dashes = dashes.filter(dash => Object.keys(dash.REPORTS).length > 0);
 	const summary = dashes.map((dash) => {
 		return `\t• DASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
 
-${makeReportSummaries(dash.SAVED_REPORTS)}`;
+${makeReportSummaries(dash.REPORTS)}`;
 	}).join('\n');
 	return `DASHBOARDS\n
 ${summary}
