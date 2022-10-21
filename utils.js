@@ -13,6 +13,22 @@ const mpImport = require('mixpanel-import');
 const prompt = require('prompt');
 const { URLSearchParams } = require('url');
 
+const axiosRetry = require('axios-retry');
+// retries on 500: https://stackoverflow.com/a/64076585
+
+axiosRetry(fetch, {
+	retries: 3, // number of retries
+	retryDelay: (retryCount) => {
+		console.log(`retry attempt: ${retryCount}`);
+		return retryCount * 2000; // time interval between retries
+	},
+	retryCondition: (error) => {
+		// if retry condition is not specified, by default idempotent requests are retried
+		return error.response.status === 500;
+	},
+});
+
+
 
 
 // AUTH + PERSISTENCE
@@ -334,9 +350,9 @@ exports.getAllDash = async function (creds) {
 		auth: { username, password }
 	}).catch(async (e) => {
 		creds;
-		debugger;
 		console.error(`ERROR GETTING DASH`);
 		console.error(`${e.message} : ${e.response.data.error}`);
+		debugger;
 		let shouldContinue = await failPrompt();
 		if (shouldContinue) {
 			return { data: { results: [] } };
@@ -355,9 +371,9 @@ exports.getDashReports = async function (creds, dashId) {
 		auth: { username, password }
 	}).catch(async (e) => {
 		creds;
-		debugger;
 		console.error(`ERROR GETTING REPORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
+		debugger;
 		let shouldContinue = await failPrompt();
 		if (shouldContinue) {
 			return { data: { results: { contents: { report: [] } } } };
@@ -377,7 +393,6 @@ exports.getDashReports = async function (creds, dashId) {
 
 	return dashSummary;
 
-	return res.results.contents.report;
 };
 
 
@@ -660,15 +675,17 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 
 //TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
-	let { acct: username, pass: password, project, workspace, region } = targetCreds;
-
-	let results = {
+	const { acct: username, pass: password, project, workspace, region } = targetCreds;
+	let dashCount = -1;
+	const OGDashes = clone(dashes);
+	const results = {
 		dashes: [],
 		reports: [],
 		shares: [],
 		pins: [],
 		text: [],
-		media: []
+		media: [],
+		layoutUpdates: [],
 	};
 
 	//match old and new custom entities by subbing olds Ids for new ones
@@ -688,6 +705,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
 	loopDash: for (const dash of newDashes) {
 		let failed = false;
+		dashCount++;
 		//copy all child reports metadatas
 		const reports = [];
 		const media = [];
@@ -736,27 +754,45 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			matchedEntities;
 			console.error(`ERROR MAKING DASH! ${dash.title}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
-			if (!e.response.data.error.includes('already exists')) debugger;
+			if (!e.response?.data?.error?.includes('already exists')) debugger;
 			return {};
 
 		});
 		results.dashes.push(createdDash?.data?.results);
-		
+
 		if (failed) {
 			continue loopDash;
 		}
-		
-		//use dash id to make reports
+		//stash the old layout
+		const oldDashLayout = OGDashes[dashCount].LAYOUT;
+
+		//use new dash id to make reports
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
-		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts);
-		const createdMedia = await makeMedia(targetCreds, media);
-		const createdText = await makeText(targetCreds, text);
+		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts, oldDashLayout);
+		const createdMedia = await makeMedia(targetCreds, media, oldDashLayout);
+		const createdText = await makeText(targetCreds, text, oldDashLayout);
 		results.reports.push(createdReports);
 		results.media.push(createdMedia);
 		results.text.push(createdText);
 
-		//TODO UPDATE LAYOUT
+		// UPDATE LAYOUT
+		// very hacky
+		const allCreatedEntities = [...results.reports, ...results.media, ...results.text].flat();
+		const mostRecentNewDashLayout = allCreatedEntities.slice(-1).pop().results.layout;
+		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
+		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: matchedDashLayout
+		}).catch((e) => {
+			matchedDashLayout;
+			console.error(`ERROR UPDATING DASH LAYOUT!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+		});
+
+		results.layoutUpdates.push(layoutUpdate);
 
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
@@ -766,9 +802,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			data: sharePayload
 		}).catch((e) => {
 			sharePayload;
-			debugger;
 			console.error(`ERROR SHARING DASH!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
 		});
 
 		results.shares.push(sharedDash);
@@ -948,11 +984,84 @@ exports.sendProfiles = async function (source, target, transform) {
 
 
 // UTILS
-const makeMedia = async function (creds, media = []) {
+const reconcileLayouts = function (oldDash, newDash, newDashItems) {
+	const mappedLayout = newDashItems.map(item => {
+		return {
+			ids: item.newLayout, layout: item.oldLayout
+		};
+	});
+	const currentDashLayout = newDashItems.slice(-1).pop().results.layout.rows;
+	const newLayout = {
+		rows_order: [],
+		rows: {}
+	};
+
+	const numRows = oldDash.order.length;
+	const newRows = newDash.order.slice(0, numRows);
+	newLayout.rows_order = [...newRows];
+
+	for (const [index, rowId] of Object.entries(newRows)) {
+		newLayout.rows[rowId] = {
+			cells: [],
+			height: 0
+		};
+		const itemsInRow = mappedLayout
+			.filter(item => item.layout.rowNumber == index)
+			.sort((a, b) => a.layout.cellNumber - b.layout.cellNumber);
+
+		//carefully place the card with the source layout settings but the target ids
+		for (const card of itemsInRow) {
+			newLayout.rows[rowId].cells.push({
+				content_id: card.ids.content_id,
+				content_type: card.ids.content_type,
+				id: card.ids.id,
+				width: card.layout.width
+			});
+		}
+
+	}
+
+	// TODO BUILD THIS DATA STRUCTURE FROM WHAT YOU HAVE
+	let me = {
+		"layout": {
+			"rows": [
+				{
+					"height": 0,
+					"cells": [
+						{
+							"id": "dQ32tc8d",
+							"width": 6
+						},
+						{
+							"id": "fEGqmELw",
+							"width": 6
+						}
+					],
+					"id": "TUvsEPn4"
+				}
+			],
+			"rows_order": [
+				"TUvsEPn4",
+				"bTJDNg75"
+			]
+		}
+	};
+
+
+	return {
+		layout: newLayout
+	};
+
+};
+
+const makeMedia = async function (creds, media = [], oldDashLayout) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
+	const OGMedia = clone(media);
+	let mediaCount = -1;
 	loopMedia: for (const mediaItem of media) {
 		let failed = false;
+		mediaCount++;
 
 		const mediaCreate = { "content": { "action": "create", "content_type": "media", "content_params": { "media_type": "", "service": "", "path": "" } } };
 		const createMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
@@ -1008,7 +1117,26 @@ const makeMedia = async function (creds, media = []) {
 			debugger;
 			return {};
 		});
-		results.push(updatedMediaCard);
+
+		if (!failed) {
+			const oldId = OGMedia[mediaCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			updatedMediaCard.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = updatedMediaCard.data.results.layout.rows[updatedMediaCard.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			updatedMediaCard.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(updatedMediaCard?.data || updatedMediaCard);
 		if (failed) {
 			continue loopMedia;
 		}
@@ -1018,11 +1146,14 @@ const makeMedia = async function (creds, media = []) {
 	return results;
 };
 
-const makeText = async function (creds, text = []) {
+const makeText = async function (creds, text = [], oldDashLayout) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
+	const OGText = clone(text);
+	let textCount = -1;
 	loopText: for (const textCard of text) {
 		let failed = false;
+		textCount++;
 
 		const textCreate = { "content": { "action": "create", "content_type": "text", "content_params": { "markdown": "" } } };
 		const createTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
@@ -1031,9 +1162,9 @@ const makeText = async function (creds, text = []) {
 			data: textCreate
 
 		}).catch((e) => {
-			failed = true;			
+			failed = true;
 			textCard;
-			results;			
+			results;
 			console.error(`ERROR CREATING MEDIA CARD!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
 			debugger;
@@ -1077,7 +1208,26 @@ const makeText = async function (creds, text = []) {
 			debugger;
 			return {};
 		});
-		results.push(updatedTextCard);
+
+		if (!failed) {
+			const oldId = OGText[textCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			updatedTextCard.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = updatedTextCard.data.results.layout.rows[updatedTextCard.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			updatedTextCard.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(updatedTextCard?.data || updatedTextCard);
 		if (failed) {
 			continue loopText;
 		}
@@ -1086,17 +1236,16 @@ const makeText = async function (creds, text = []) {
 	return results;
 };
 
-const adjustLayout = async function (creds, layout = {}) {
 
-};
-
-const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts) {
+const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
+	const OGReport = clone(reports);
+	let reportCount = -1;
 	loopReports: for (const report of reports) {
 		let failed = false;
-
-		report.global_access_type = "on";
+		reportCount++;
+		// report.global_access_type = "on";
 
 		//get rid of disallowed keys
 		blacklistKeys.forEach(key => delete report[key]);
@@ -1107,6 +1256,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 				delete report[key];
 			}
 		}
+		if (!report.description) report.description = report.name;
 
 		//unsure why? ... but you gotta do it.
 		report.params = JSON.stringify(report.params);
@@ -1130,12 +1280,31 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 			failed = true;
 			report;
 			results;
-			debugger;
 			console.error(`ERROR CREATING REPORT!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
 			return {};
 		});
-		results.push(createdReport);
+
+		if (!failed) {
+			const oldId = OGReport[reportCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			createdReport.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = createdReport.data.results.layout.rows[createdReport.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			createdReport.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(createdReport?.data || createdReport);
 		if (failed) {
 			continue loopReports;
 		}

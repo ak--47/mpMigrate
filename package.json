@@ -5,11 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --inspect scratch.js",
-    "delete": "MODE=delete nodemon scratch.js",
+    "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --ext js --inspect scratch.js",
+    "delete": "MODE=delete nodemon --ignore . scratch.js",
     "prune": "rm -rf ./savedProjects/*",
-    "upload": "npm publish",
-    "scratch": "nodemon --inspect scratch.js"
+    "upload": "npm publish"
   },
   "bin": {
     "mp-migrate": "./index.js"
@@ -26,6 +25,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.27.2",
+    "axios-retry": "^3.3.1",
     "dayjs": "^1.11.4",
     "deep-object-diff": "^1.1.7",
     "dotenv": "^16.0.1",

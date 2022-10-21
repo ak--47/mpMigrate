@@ -151,7 +151,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			// TODO: adjust TEXT, MEDIA, and LAYOUT
 			sourceDashes[index].MEDIA = dashMeta.media;
 			sourceDashes[index].TEXT = dashMeta.text;
-			sourceDashes[index].LAYOUT = dashMeta.layout;
+			sourceDashes[index].LAYOUT = dashMeta.layout;			
 
 		}
 		log(`	... 👍 found ${u.comma(sourceFoundReports)} reports, ${u.comma(sourceFoundMedia)} media objects, ${u.comma(sourceFoundText)} text cards`);
