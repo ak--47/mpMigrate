@@ -19,12 +19,12 @@ const axiosRetry = require('axios-retry');
 axiosRetry(fetch, {
 	retries: 3, // number of retries
 	retryDelay: (retryCount) => {
-		console.log(`retry attempt: ${retryCount}`);
+		console.log(`	retrying request... attempt: ${retryCount}`);
 		return retryCount * 2000; // time interval between retries
 	},
 	retryCondition: (error) => {
 		// if retry condition is not specified, by default idempotent requests are retried
-		return error.response.status === 500;
+		return error.response.status === 503;
 	},
 });
 
@@ -776,24 +776,6 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		results.media.push(createdMedia);
 		results.text.push(createdText);
 
-		// UPDATE LAYOUT
-		// very hacky
-		const allCreatedEntities = [...results.reports, ...results.media, ...results.text].flat();
-		const mostRecentNewDashLayout = allCreatedEntities.slice(-1).pop().results.layout;
-		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
-		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
-			method: `patch`,
-			auth: { username, password },
-			data: matchedDashLayout
-		}).catch((e) => {
-			matchedDashLayout;
-			console.error(`ERROR UPDATING DASH LAYOUT!`);
-			console.error(`${e.message} : ${e.response.data.error}`);
-			debugger;
-		});
-
-		results.layoutUpdates.push(layoutUpdate);
-
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
 		let sharedDash = await fetch(URLs.shareDash(project, dashId, region), {
@@ -820,11 +802,28 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
 		results.pins.push(pinnedDash);
 
+		// UPDATE LAYOUT
+		const allCreatedEntities = [...results.reports, ...results.media, ...results.text].flat();
+		const mostRecentNewDashLayout = allCreatedEntities.slice(-1).pop().results.layout;
+		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
+		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: matchedDashLayout
+		}).catch((e) => {
+			matchedDashLayout;
+			console.error(`ERROR UPDATING DASH LAYOUT!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+		});
+
+		results.layoutUpdates.push(layoutUpdate);
 	}
 
 	results.reports = results.reports.flat();
 	results.media = results.media.flat();
 	results.text = results.text.flat();
+	results.layoutUpdates = results.layoutUpdates.flat();
 	return results;
 };
 
@@ -1012,8 +1011,9 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 		//carefully place the card with the source layout settings but the target ids
 		for (const card of itemsInRow) {
 			newLayout.rows[rowId].cells.push({
-				content_id: card.ids.content_id,
-				content_type: card.ids.content_type,
+				//these two keys verify the match but are not required in the payload
+				//content_id: card.ids.content_id,
+				//content_type: card.ids.content_type,
 				id: card.ids.id,
 				width: card.layout.width
 			});
@@ -1021,36 +1021,11 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 
 	}
 
-	// TODO BUILD THIS DATA STRUCTURE FROM WHAT YOU HAVE
-	let me = {
-		"layout": {
-			"rows": [
-				{
-					"height": 0,
-					"cells": [
-						{
-							"id": "dQ32tc8d",
-							"width": 6
-						},
-						{
-							"id": "fEGqmELw",
-							"width": 6
-						}
-					],
-					"id": "TUvsEPn4"
-				}
-			],
-			"rows_order": [
-				"TUvsEPn4",
-				"bTJDNg75"
-			]
-		}
-	};
 
 
-	return {
+	return JSON.stringify({
 		layout: newLayout
-	};
+	});
 
 };
 
