@@ -12,10 +12,9 @@ const dateFormat = `YYYY-MM-DD`;
 const mpImport = require('mixpanel-import');
 const prompt = require('prompt');
 const { URLSearchParams } = require('url');
-
 const axiosRetry = require('axios-retry');
-// retries on 500: https://stackoverflow.com/a/64076585
-
+// retries on 503: https://stackoverflow.com/a/64076585
+// TODO on 500, just change the report name
 axiosRetry(fetch, {
 	retries: 3, // number of retries
 	retryDelay: (retryCount) => {
@@ -28,10 +27,12 @@ axiosRetry(fetch, {
 	},
 });
 
+/*
+--------------
+AUTH + STORAGE
+--------------
+*/
 
-
-
-// AUTH + PERSISTENCE
 exports.getEnvCreds = function () {
 	//sweep .env to pickup creds
 	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`);
@@ -61,8 +62,6 @@ exports.getEnvCreds = function () {
 	if (!envCredsSource.region) envCredsSource.region = `US`;
 	if (!envCredsTarget.region) envCredsTarget.region = `US`;
 
-
-
 	return {
 		envCredsSource,
 		envCredsTarget
@@ -82,7 +81,7 @@ exports.validateServiceAccount = async function (creds) {
 		process.exit(1);
 	})).data;
 
-	//can this users access the supplied project
+	//can the user access the supplied project
 	if (res.results.projects[project]) {
 		`pass: access`;
 	} else {
@@ -186,7 +185,12 @@ exports.makeProjectFolder = async function (workspace) {
 	return path.resolve(folderPath);
 };
 
-// USER PROMPTS
+/*
+------------
+USER PROMPTS
+------------
+*/
+
 exports.userPrompt = async function (source, target, shouldContinue) {
 	//user input
 	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
@@ -280,9 +284,6 @@ exports.userPrompt = async function (source, target, shouldContinue) {
 		copyProfiles,
 		copyEntities
 	};
-
-
-
 };
 
 async function failPrompt() {
@@ -321,7 +322,12 @@ async function failPrompt() {
 	}
 }
 
-// GETTERS
+/*
+-------
+GETTERS
+-------
+*/
+
 exports.getCohorts = async function (creds) {
 	let { acct: username, pass: password, workspace, region } = creds;
 	let res = (await fetch(URLs.getCohorts(workspace, region), {
@@ -395,8 +401,6 @@ exports.getDashReports = async function (creds, dashId) {
 
 };
 
-
-
 exports.getSchema = async function (creds) {
 	let { acct: username, pass: password, project, region } = creds;
 	let res = (await fetch(URLs.getSchemas(project, region), {
@@ -434,6 +438,7 @@ exports.getCustomEvents = async function (creds) {
 	return res.custom_events;
 
 };
+
 exports.getCustomProps = async function (creds) {
 	let { acct: username, pass: password, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomProps(workspace, region), {
@@ -453,33 +458,16 @@ exports.getCustomProps = async function (creds) {
 
 	})).data.results;
 
-	// let dataDfnsEvents = (await fetch(URLs.dataDefinitions(`Event`, workspace), {
-	//     auth: { username, password }
-	// }).catch((e) => {
-	//     creds;
-	//     debugger;
-	//     console.error(`ERROR GETTING CUSTOM PROPS!`)
-	//     console.error(`${e.message} : ${e.response.data.error}`)
-	//     process.exit(1)
-	// })).data.results
-
-	// let dataDfnsUsers = (await fetch(URLs.dataDefinitions(`User`, workspace), {
-	//     auth: { username, password }
-	// }).catch((e) => {
-	//     creds;
-	//     debugger;
-	//     console.error(`ERROR GETTING CUSTOM PROPS!`)
-	//     console.error(`${e.message} : ${e.response.data.error}`)
-	//     process.exit(1)
-	// })).data.results
-
-	// let dataDfns = [...dataDfnsEvents, ...dataDfnsUsers].filter(p => p.status === 'custom')
-
 	return res;
 
 };
 
-// SETTERS
+/*
+-------
+SETTERS
+-------
+*/
+
 exports.postSchema = async function (creds, schema) {
 	let { acct: username, pass: password, project, region } = creds;
 
@@ -517,8 +505,9 @@ exports.postSchema = async function (creds, schema) {
 	return res.data.results;
 };
 
-//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
+
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
+	//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
 	let { acct: username, pass: password, workspace, project, region } = targetCreds;
 	let results = [];
 
@@ -572,7 +561,6 @@ exports.makeCustomProps = async function (creds, custProps) {
 		let failed = false;
 		//get rid of disallowed keys 
 		blacklistKeys.forEach(key => delete custProp[key]);
-
 
 		//get rid of null keys
 		for (let key in custProp) {
@@ -809,12 +797,13 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
 			auth: { username, password },
-			data: matchedDashLayout
+			data: JSON.stringify(matchedDashLayout)
 		}).catch((e) => {
 			matchedDashLayout;
 			console.error(`ERROR UPDATING DASH LAYOUT!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
 			debugger;
+			return {}
 		});
 
 		results.layoutUpdates.push(layoutUpdate);
@@ -827,9 +816,12 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	return results;
 };
 
+/*
+-----------
+DATA EXPORT
+-----------
+*/
 
-
-// EXPORT
 exports.exportAllEvents = async function (source) {
 	const startDate = dayjs(source.start).format(dateFormat);
 	const endDate = dayjs().format(dateFormat);
@@ -909,7 +901,6 @@ exports.exportAllProfiles = async function (source, target) {
 			data: encodedParams
 		})).data;
 
-
 		profiles = response.results.map(function (person) {
 			return {
 				"$token": target.token,
@@ -933,8 +924,177 @@ exports.exportAllProfiles = async function (source, target) {
 
 };
 
-// INGESTION
-// https://github.com/ak--47/mixpanel-import#credentials
+exports.getProjCount = async function (source, type) {
+	const startDate = dayjs(source.start).format(dateFormat);
+	const endDate = dayjs(source.end).format(dateFormat);
+	let payload;
+	if (type === `events`) {
+		payload = {
+			"tracking_props": {
+				"is_main_query_for_report": true,
+				"report_name": "insights",
+				"has_unsaved_changes": true,
+				"query_reason": "qb_other_update"
+			},
+			"bookmark": {
+				"sections": {
+					"show": [{
+						"dataset": "$mixpanel",
+						"value": {
+							"name": "$all_events",
+							"resourceType": "events"
+						},
+						"resourceType": "events",
+						"profileType": null,
+						"search": "",
+						"dataGroupId": null,
+						"math": "total",
+						"perUserAggregation": null,
+						"property": null
+					}],
+					"cohorts": [],
+					"group": [],
+					"filter": [],
+					"formula": [],
+					"time": [{
+						"dateRangeType": "between",
+						"unit": "day",
+						"value": [startDate, endDate]
+					}]
+				},
+				"columnWidths": {
+					"bar": {}
+				},
+				"displayOptions": {
+					"chartType": "bar",
+					"plotStyle": "standard",
+					"analysis": "linear",
+					"value": "absolute"
+				},
+				"sorting": {
+					"bar": {
+						"sortBy": "column",
+						"colSortAttrs": [{
+							"sortBy": "value",
+							"sortOrder": "desc"
+						}]
+					},
+					"line": {
+						"sortBy": "value",
+						"sortOrder": "desc",
+						"valueField": "averageValue",
+						"colSortAttrs": []
+					},
+					"table": {
+						"sortBy": "column",
+						"colSortAttrs": [{
+							"sortBy": "label",
+							"sortOrder": "asc"
+						}]
+					},
+					"insights-metric": {
+						"sortBy": "value",
+						"sortOrder": "desc",
+						"valueField": "totalValue",
+						"colSortAttrs": []
+					},
+					"pie": {
+						"sortBy": "value",
+						"sortOrder": "desc",
+						"valueField": "totalValue",
+						"colSortAttrs": []
+					}
+				}
+			},
+			"queryLimits": {
+				"limit": 10000
+			},
+			"use_query_cache": true,
+			"use_query_sampling": false
+		};
+	} else if (type === `profiles`) {
+		payload = {
+			"tracking_props": {
+				"is_main_query_for_report": true,
+				"report_name": "insights",
+				"has_unsaved_changes": true,
+				"query_reason": "nav_from_other_report"
+			},
+			"bookmark": {
+				"sections": {
+					"show": [{
+						"dataset": null,
+						"value": { "name": "$all_people", "resourceType": "people" },
+						"resourceType": "people",
+						"profileType": "people",
+						"search": "",
+						"dataGroupId": null,
+						"math": "total",
+						"perUserAggregation": null,
+						"property": null
+					}],
+					"cohorts": [],
+					"group": [],
+					"filter": [],
+					"formula": [],
+					"time": [{ "unit": "day", "value": 30 }]
+				},
+				"columnWidths": { "bar": {} },
+				"displayOptions": { "chartType": "bar", "plotStyle": "standard", "analysis": "linear", "value": "absolute" },
+				"sorting": { "bar": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "value", "sortOrder": "desc" }] }, "line": { "sortBy": "value", "sortOrder": "desc", "valueField": "averageValue", "colSortAttrs": [] }, "table": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "label", "sortOrder": "asc" }] }, "insights-metric": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] }, "pie": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] } }
+			},
+			"queryLimits": { "limit": 3000 },
+			"use_query_cache": true,
+			"use_query_sampling": false
+		};
+	} else {
+		console.error(`only supported query types are "events" or "profiles"`);
+		process.exit(1);
+	}
+
+	const opts = {
+		method: 'POST',
+		url: URLs.getInsightsReport(source.project, source?.region),
+		headers: {
+			Accept: 'application/json'
+
+		},
+		auth: {
+			username: source.acct,
+			password: source.pass
+		},
+		data: payload
+	};
+
+	let resTotal;
+
+	try {
+		resTotal = await fetch(opts);
+
+		if (type === `events`) {
+			return resTotal.data.series["All Events - Total"]?.all;
+		} else if (type === `profiles`) {
+			return resTotal.data.series["All User Profiles - Total"]?.value;
+		}
+
+	} catch (e) {
+		source;
+		type;
+		debugger;
+		console.error('ERROR GETTING COUNTS!');
+		console.error(`${e.message} : ${e.response.data.error}`);
+
+	}
+};
+
+
+/*
+----------
+DATA IMPORT
+https://github.com/ak--47/mixpanel-import#credentials
+----------
+*/
+
 exports.sendEvents = async function (source, target, transform) {
 	const data = path.resolve(`${source.localPath}/exports/events.ndjson`);
 	const creds = {
@@ -982,53 +1142,11 @@ exports.sendProfiles = async function (source, target, transform) {
 };
 
 
-// UTILS
-const reconcileLayouts = function (oldDash, newDash, newDashItems) {
-	const mappedLayout = newDashItems.map(item => {
-		return {
-			ids: item.newLayout, layout: item.oldLayout
-		};
-	});
-	const currentDashLayout = newDashItems.slice(-1).pop().results.layout.rows;
-	const newLayout = {
-		rows_order: [],
-		rows: {}
-	};
-
-	const numRows = oldDash.order.length;
-	const newRows = newDash.order.slice(0, numRows);
-	newLayout.rows_order = [...newRows];
-
-	for (const [index, rowId] of Object.entries(newRows)) {
-		newLayout.rows[rowId] = {
-			cells: [],
-			height: 0
-		};
-		const itemsInRow = mappedLayout
-			.filter(item => item.layout.rowNumber == index)
-			.sort((a, b) => a.layout.cellNumber - b.layout.cellNumber);
-
-		//carefully place the card with the source layout settings but the target ids
-		for (const card of itemsInRow) {
-			newLayout.rows[rowId].cells.push({
-				//these two keys verify the match but are not required in the payload
-				//content_id: card.ids.content_id,
-				//content_type: card.ids.content_type,
-				id: card.ids.id,
-				width: card.layout.width
-			});
-		}
-
-	}
-
-
-
-	return JSON.stringify({
-		layout: newLayout
-	});
-
-};
-
+/*
+-------------
+REPORT MAKERS
+-------------
+*/
 const makeMedia = async function (creds, media = [], oldDashLayout) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
@@ -1211,7 +1329,6 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 	return results;
 };
 
-
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
 	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
 	let results = [];
@@ -1289,6 +1406,96 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 	return results;
 };
 
+/*
+--------------------
+PAYLOAD MANIPULATORS
+--------------------
+*/
+
+const reconcileLayouts = function (oldDash, newDash, newDashItems) {
+	const mappedLayout = newDashItems.map(item => {
+		return {
+			ids: item.newLayout, layout: item.oldLayout
+		};
+	});
+	const currentDashLayout = newDashItems.slice(-1).pop().results.layout.rows;
+	const newLayout = {
+		rows_order: [],
+		rows: [] //rows: {}
+	};
+
+	const numRows = oldDash.order.length;
+	const newRows = newDash.order.slice();	//slice(0, numRows);
+	newLayout.rows_order = [...newRows];
+
+	for (const [index, rowId] of Object.entries(newRows)) {
+		let rowTemplate = {
+			cells: [],
+			height: 0,
+			id: rowId
+		};
+	
+		const itemsInRow = mappedLayout
+			.filter(item => item.layout.rowNumber == index)
+			.sort((a, b) => a.layout.cellNumber - b.layout.cellNumber);
+
+		if (itemsInRow.length > 0) {
+
+			//carefully place the card with the source layout settings but the target ids
+			for (const card of itemsInRow) {
+				rowTemplate.cells.push({
+					//these two keys verify the match but are not required in the payload
+					//content_id: card.ids.content_id,
+					//content_type: card.ids.content_type,
+					id: card.ids.id,
+					width: card.layout.width
+				});
+			}			
+		}
+
+		newLayout.rows.push(rowTemplate)
+
+	}
+	
+	return { layout: newLayout };
+
+};
+
+const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
+	let sourceCohortList = [];
+
+	if (sourceCreds) {
+		const { projId, workspace, acct, pass, region } = sourceCreds;
+		sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
+			method: `POST`,
+			auth: { username: acct, password: pass }
+		})).data;
+
+	}
+	let results = {
+		cohorts: [],
+		custEvents: [],
+		custProps: []
+	};
+
+	sourceEntities.cohorts = sourceCohortList;
+
+	//iterate through all source types and produce mappings of source and target
+	let entityTypes = Object.keys(sourceEntities);
+	for (const type of entityTypes) {
+		for (const [index, entity] of Object.entries(sourceEntities[type])) {
+			let template = {
+				name: entity.name,
+				sourceId: sourceEntities[type][index]?.id || sourceEntities[type][index]?.customPropertyId,
+				targetId: targetEntities[type][index]?.id || targetEntities[type][index]?.customPropertyId,
+			};
+			results[type].push(template);
+		}
+	}
+
+	return results;
+};
+
 const removeNulls = function (obj) {
 	function isObject(val) {
 		if (val === null) { return false; }
@@ -1331,44 +1538,8 @@ const changeFactory = function (sourceId = "", targetId = "") {
 	};
 };
 
-const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
-	let sourceCohortList = [];
-
-	if (sourceCreds) {
-		const { projId, workspace, acct, pass, region } = sourceCreds;
-		sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
-			method: `POST`,
-			auth: { username: acct, password: pass }
-		})).data;
-
-	}
-	let results = {
-		cohorts: [],
-		custEvents: [],
-		custProps: []
-	};
-
-
-	sourceEntities.cohorts = sourceCohortList;
-
-	//iterate through all source types and produce mappings of source and target
-	let entityTypes = Object.keys(sourceEntities);
-	for (const type of entityTypes) {
-		for (const [index, entity] of Object.entries(sourceEntities[type])) {
-			let template = {
-				name: entity.name,
-				sourceId: sourceEntities[type][index]?.id || sourceEntities[type][index]?.customPropertyId,
-				targetId: targetEntities[type][index]?.id || targetEntities[type][index]?.customPropertyId,
-			};
-			results[type].push(template);
-		}
-	}
-
-	return results;
-};
-
-//https://stackoverflow.com/a/45287523
 const renameKeys = function (obj, newKeys) {
+	//https://stackoverflow.com/a/45287523
 	const keyValues = Object.keys(obj).map(key => {
 		const newKey = newKeys[key] || key;
 		return {
@@ -1376,14 +1547,6 @@ const renameKeys = function (obj, newKeys) {
 		};
 	});
 	return Object.assign({}, ...keyValues);
-};
-
-const writeFile = async function (filename, data) {
-	await fs.writeFile(filename, data);
-};
-
-const json = function (data) {
-	return JSON.stringify(data, null, 2);
 };
 
 // https://stackoverflow.com/a/41951007
@@ -1418,174 +1581,20 @@ const clone = function (thing, opts) {
 };
 
 
-// QUERY
-exports.getProjCount = async function (source, type) {
-	const startDate = dayjs(source.start).format(dateFormat);
-	const endDate = dayjs(source.end).format(dateFormat);
-	let payload;
-	if (type === `events`) {
-		payload = {
-			"tracking_props": {
-				"is_main_query_for_report": true,
-				"report_name": "insights",
-				"has_unsaved_changes": true,
-				"query_reason": "qb_other_update"
-			},
-			"bookmark": {
-				"sections": {
-					"show": [{
-						"dataset": "$mixpanel",
-						"value": {
-							"name": "$all_events",
-							"resourceType": "events"
-						},
-						"resourceType": "events",
-						"profileType": null,
-						"search": "",
-						"dataGroupId": null,
-						"math": "total",
-						"perUserAggregation": null,
-						"property": null
-					}],
-					"cohorts": [],
-					"group": [],
-					"filter": [],
-					"formula": [],
-					"time": [{
-						"dateRangeType": "between",
-						"unit": "day",
-						"value": [startDate, endDate]
-					}]
-				},
-				"columnWidths": {
-					"bar": {}
-				},
-				"displayOptions": {
-					"chartType": "bar",
-					"plotStyle": "standard",
-					"analysis": "linear",
-					"value": "absolute"
-				},
-				"sorting": {
-					"bar": {
-						"sortBy": "column",
-						"colSortAttrs": [{
-							"sortBy": "value",
-							"sortOrder": "desc"
-						}]
-					},
-					"line": {
-						"sortBy": "value",
-						"sortOrder": "desc",
-						"valueField": "averageValue",
-						"colSortAttrs": []
-					},
-					"table": {
-						"sortBy": "column",
-						"colSortAttrs": [{
-							"sortBy": "label",
-							"sortOrder": "asc"
-						}]
-					},
-					"insights-metric": {
-						"sortBy": "value",
-						"sortOrder": "desc",
-						"valueField": "totalValue",
-						"colSortAttrs": []
-					},
-					"pie": {
-						"sortBy": "value",
-						"sortOrder": "desc",
-						"valueField": "totalValue",
-						"colSortAttrs": []
-					}
-				}
-			},
-			"queryLimits": {
-				"limit": 10000
-			},
-			"use_query_cache": true,
-			"use_query_sampling": false
-		};
-	} else if (type === `profiles`) {
-		payload = {
-			"tracking_props": {
-				"is_main_query_for_report": true,
-				"report_name": "insights",
-				"has_unsaved_changes": true,
-				"query_reason": "nav_from_other_report"
-			},
-			"bookmark": {
-				"sections": {
-					"show": [{
-						"dataset": null,
-						"value": { "name": "$all_people", "resourceType": "people" },
-						"resourceType": "people",
-						"profileType": "people",
-						"search": "",
-						"dataGroupId": null,
-						"math": "total",
-						"perUserAggregation": null,
-						"property": null
-					}],
-					"cohorts": [],
-					"group": [],
-					"filter": [],
-					"formula": [],
-					"time": [{ "unit": "day", "value": 30 }]
-				},
-				"columnWidths": { "bar": {} },
-				"displayOptions": { "chartType": "bar", "plotStyle": "standard", "analysis": "linear", "value": "absolute" },
-				"sorting": { "bar": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "value", "sortOrder": "desc" }] }, "line": { "sortBy": "value", "sortOrder": "desc", "valueField": "averageValue", "colSortAttrs": [] }, "table": { "sortBy": "column", "colSortAttrs": [{ "sortBy": "label", "sortOrder": "asc" }] }, "insights-metric": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] }, "pie": { "sortBy": "value", "sortOrder": "desc", "valueField": "totalValue", "colSortAttrs": [] } }
-			},
-			"queryLimits": { "limit": 3000 },
-			"use_query_cache": true,
-			"use_query_sampling": false
-		};
-	} else {
-		console.error(`only supported query types are "events" or "profiles"`);
-		process.exit(1);
-	}
+/*
+-----------------
+MISC UTILITIES
+-----------------
+*/
 
-	const opts = {
-		method: 'POST',
-		url: URLs.getInsightsReport(source.project, source?.region),
-		headers: {
-			Accept: 'application/json'
-
-		},
-		auth: {
-			username: source.acct,
-			password: source.pass
-		},
-		data: payload
-	};
-
-	let resTotal;
-
-	try {
-		resTotal = await fetch(opts);
-
-		if (type === `events`) {
-			return resTotal.data.series["All Events - Total"]?.all;
-		} else if (type === `profiles`) {
-			return resTotal.data.series["All User Profiles - Total"]?.value;
-		}
-
-	} catch (e) {
-		source;
-		type;
-		debugger;
-		console.error('ERROR GETTING COUNTS!');
-		console.error(`${e.message} : ${e.response.data.error}`);
-
-
-	}
-
+const writeFile = async function (filename, data) {
+	await fs.writeFile(filename, data);
 };
 
+const json = function (data) {
+	return JSON.stringify(data, null, 2);
+};
 
-// MISC
 exports.comma = function (x) {
 	try {
 		return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -1607,8 +1616,31 @@ const openExplorerinMac = function (path, callback) {
 	});
 };
 
+function log(message, data, hasResponse = false) {
 
-// SUMMARIES
+	if (message) {
+		console.log(message);
+		// logs += `${message}`;
+		if (!hasResponse) {
+			console.log('\n');
+			// logs += `\n`;
+		}
+	}
+
+	if (data) {
+		console.log('\n');
+		console.log(JSON.stringify(data, null, 2));
+		// logs += `${JSON.stringify(data, null, 2)}`;
+		console.log('\n');
+	}
+}
+
+
+/*
+------------------
+SUMMARY GENERATORS
+------------------
+*/
 exports.saveLocalSummary = async function (projectMetaData) {
 	const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData;
 	const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
@@ -1745,23 +1777,3 @@ const makeReportSummaries = function (reports) {
 
 	return summary;
 };
-
-
-function log(message, data, hasResponse = false) {
-
-	if (message) {
-		console.log(message);
-		// logs += `${message}`;
-		if (!hasResponse) {
-			console.log('\n');
-			// logs += `\n`;
-		}
-	}
-
-	if (data) {
-		console.log('\n');
-		console.log(JSON.stringify(data, null, 2));
-		// logs += `${JSON.stringify(data, null, 2)}`;
-		console.log('\n');
-	}
-}

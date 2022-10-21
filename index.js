@@ -6,7 +6,14 @@
 // https://github.com/ak--47/mpMigrate
 // 
 
-//todo: local time to project time
+/*
+-------
+TODOS:
+	allow specifiying of dash, cohort, custom prop/event ids in source
+	dashboard filters with custom props
+	custom events with custom props
+-------
+*/
 
 require('dotenv').config();
 const u = require('./utils.js');
@@ -43,6 +50,12 @@ async function main(
 	}) {
 
 	global.SILENT = opts.silent || false;
+
+	/*
+	-------
+	WELCOME
+	-------
+	*/
 
 	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
 		(by AK) v1.08
@@ -83,6 +96,12 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	}
 
 	time('migrate', 'start');
+
+	/*
+	-------
+	FETCH SOURCE
+	-------
+	*/
 
 	//SOURCE
 	//validate service account & get workspace id
@@ -151,7 +170,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			// TODO: adjust TEXT, MEDIA, and LAYOUT
 			sourceDashes[index].MEDIA = dashMeta.media;
 			sourceDashes[index].TEXT = dashMeta.text;
-			sourceDashes[index].LAYOUT = dashMeta.layout;			
+			sourceDashes[index].LAYOUT = dashMeta.layout;
 
 		}
 		log(`	... 👍 found ${u.comma(sourceFoundReports)} reports, ${u.comma(sourceFoundMedia)} media objects, ${u.comma(sourceFoundText)} text cards`);
@@ -232,6 +251,12 @@ from project: ${source.project} to project: ${target.project}
 		log(`no target project specified, exiting...`);
 		process.exit(0);
 	}
+
+	/*
+	-------
+	WRITE TO TARGET
+	-------
+	*/
 
 	log(`\nPROCEEDING WITH COPY!\n`);
 
@@ -316,6 +341,12 @@ from project: ${source.project} to project: ${target.project}
 
 	}
 
+	/*
+	-------
+	WRITE LOGS
+	-------
+	*/
+
 	const everyThingTheScriptDid = {
 		source,
 		target,
@@ -338,10 +369,17 @@ from project: ${source.project} to project: ${target.project}
 	time(`migrate`, `stop`);
 	//write logs
 	await u.writeFile(`${dataFolder}/log.txt`, logs);
+	await u.writeFile(`${dataFolder}/rawLog.json`, JSON.stringify(everyThingTheScriptDid, null, 2));
 
 	return everyThingTheScriptDid;
 }
 
+
+/*
+-------
+UTILS
+-------
+*/
 
 function log(message, data, hasResponse = false) {
 	if (SILENT) {
