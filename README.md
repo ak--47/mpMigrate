@@ -39,15 +39,17 @@ currently **not** supported:
 ## tldr;
 supply credentials:
 ```bash
-echo "SOURCE_ACCT = '{{ OLD project service account }}'
-SOURCE_PASS = '{{ OLD project service secret }}'
-SOURCE_PROJECT = '{{ OLD project id }}'
-SOURCE_DATE = '{{ date of first event in OLD project, eg... 04-20-2022 }}'
-SOURCE_REGION = 'US'
-TARGET_ACCT = '{{ NEW project service account }}'
-TARGET_PASS = '{{ NEW project secret }}'
-TARGET_PROJECT = '{{ NEW project id }}'
-TARGET_REGION = 'US'" > .env
+echo "SOURCE_ACCT = '' #OLD project service account
+SOURCE_PASS = '' #OLD project service secret
+SOURCE_PROJECT = '' #OLD project id
+SOURCE_DATE_START = '' #date of first event in OLD project, eg... 04-20-2022
+SOURCE_DATE_END = '' #date of last event in OLD project, eg... 04-21-2022
+SOURCE_REGION = 'US' #US or EU
+
+TARGET_ACCT = '' #NEW project service account
+TARGET_PASS = '' #NEW project secret
+TARGET_PROJECT = '' #NEW project id
+TARGET_REGION = 'US' #US OR EU" > .env
 ```
 
 then migrate
@@ -70,8 +72,10 @@ in this mode, a `.env` file is used to configure the `source` and `target` proje
 SOURCE_ACCT = ''  #service account username for the source project
 SOURCE_PASS = ''  #service account secret for the source project
 SOURCE_PROJECT = ''  #source project's ID
-SOURCE_DATE = ''  #the start date (if you're copying events)
+SOURCE_DATE_START = '' #OPTIONAL: if copying events, tell us when to start!
+SOURCE_DATE_END = '' #OPTIONAL: if coping events, tell us when to end!
 SOURCE_REGION = 'US' #either US or EU based on project's region; optional if US 
+
 TARGET_ACCT = ''  #service account username for target project
 TARGET_PASS = ''  #service account secret for target project
 TARGET_PROJECT = ''  #target project's ID
@@ -109,7 +113,8 @@ let source = {
 	pass: `{{ service secret }}`,
 	project: 12345,
 	region: "US",
-	start: "04-20-2022" //date of first event	
+	start: "04-20-2022", //date of first event	
+	end: "04-201-2022" //date of last event
 }
 let target = {
 	acct: `{{ service acct }}`,
