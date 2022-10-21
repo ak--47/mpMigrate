@@ -1,4 +1,5 @@
 const URLs = require('./endpoints.js');
+const blacklistKeys = URLs.blacklistKeys;
 const fetch = require('axios').default;
 const FormData = require('form-data');
 const fs = require('fs').promises;
@@ -11,21 +12,50 @@ const dateFormat = `YYYY-MM-DD`;
 const mpImport = require('mixpanel-import');
 const prompt = require('prompt');
 const { URLSearchParams } = require('url');
+const axiosRetry = require('axios-retry');
+// retries on 503: https://stackoverflow.com/a/64076585
+// TODO on 500, just change the report name
+axiosRetry(fetch, {
+	retries: 3, // number of retries
+	retryDelay: (retryCount) => {
+		console.log(`	retrying request... attempt: ${retryCount}`);
+		return retryCount * 2000; // time interval between retries
+	},
+	retryCondition: (error) => {
+		// if retry condition is not specified, by default idempotent requests are retried
+		return error.response.status === 503;
+	},
+});
 
+/*
+--------------
+AUTH + STORAGE
+--------------
+*/
 
-
-// AUTH + PERSISTENCE
 exports.getEnvCreds = function () {
 	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE`, `SOURCE_REGION`);
+	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`);
 	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE: "start", SOURCE_REGION: "region" };
+	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region" };
 	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" };
 	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
 	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
 
 	if (dayjs(envCredsSource.start).isValid()) {
 		envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat);
+	}
+
+	else {
+		envCredsSource.start = dayjs().format(dateFormat);
+	}
+
+	if (dayjs(envCredsSource.end).isValid()) {
+		envCredsSource.end = dayjs(envCredsSource.end).format(dateFormat);
+	}
+
+	else {
+		envCredsSource.end = dayjs().format(dateFormat);
 	}
 
 	// region defaults
@@ -51,7 +81,7 @@ exports.validateServiceAccount = async function (creds) {
 		process.exit(1);
 	})).data;
 
-	//can this users access the supplied project
+	//can the user access the supplied project
 	if (res.results.projects[project]) {
 		`pass: access`;
 	} else {
@@ -155,7 +185,12 @@ exports.makeProjectFolder = async function (workspace) {
 	return path.resolve(folderPath);
 };
 
-// USER PROMPTS
+/*
+------------
+USER PROMPTS
+------------
+*/
+
 exports.userPrompt = async function (source, target, shouldContinue) {
 	//user input
 	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
@@ -249,9 +284,6 @@ exports.userPrompt = async function (source, target, shouldContinue) {
 		copyProfiles,
 		copyEntities
 	};
-
-
-
 };
 
 async function failPrompt() {
@@ -290,7 +322,12 @@ async function failPrompt() {
 	}
 }
 
-// GETTERS
+/*
+-------
+GETTERS
+-------
+*/
+
 exports.getCohorts = async function (creds) {
 	let { acct: username, pass: password, workspace, region } = creds;
 	let res = (await fetch(URLs.getCohorts(workspace, region), {
@@ -319,9 +356,9 @@ exports.getAllDash = async function (creds) {
 		auth: { username, password }
 	}).catch(async (e) => {
 		creds;
-		debugger;
 		console.error(`ERROR GETTING DASH`);
 		console.error(`${e.message} : ${e.response.data.error}`);
+		debugger;
 		let shouldContinue = await failPrompt();
 		if (shouldContinue) {
 			return { data: { results: [] } };
@@ -340,9 +377,9 @@ exports.getDashReports = async function (creds, dashId) {
 		auth: { username, password }
 	}).catch(async (e) => {
 		creds;
-		debugger;
 		console.error(`ERROR GETTING REPORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
+		debugger;
 		let shouldContinue = await failPrompt();
 		if (shouldContinue) {
 			return { data: { results: { contents: { report: [] } } } };
@@ -350,9 +387,18 @@ exports.getDashReports = async function (creds, dashId) {
 		else {
 			process.exit(1);
 		}
-	})).data;
+	})).data?.results;
 
-	return res.results.contents.report;
+	const dashSummary = {
+		reports: res.contents.report,
+		media: res.contents.media,
+		text: res.contents.text,
+		layout: res.layout
+
+	};
+
+	return dashSummary;
+
 };
 
 exports.getSchema = async function (creds) {
@@ -392,6 +438,7 @@ exports.getCustomEvents = async function (creds) {
 	return res.custom_events;
 
 };
+
 exports.getCustomProps = async function (creds) {
 	let { acct: username, pass: password, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomProps(workspace, region), {
@@ -411,33 +458,16 @@ exports.getCustomProps = async function (creds) {
 
 	})).data.results;
 
-	// let dataDfnsEvents = (await fetch(URLs.dataDefinitions(`Event`, workspace), {
-	//     auth: { username, password }
-	// }).catch((e) => {
-	//     creds;
-	//     debugger;
-	//     console.error(`ERROR GETTING CUSTOM PROPS!`)
-	//     console.error(`${e.message} : ${e.response.data.error}`)
-	//     process.exit(1)
-	// })).data.results
-
-	// let dataDfnsUsers = (await fetch(URLs.dataDefinitions(`User`, workspace), {
-	//     auth: { username, password }
-	// }).catch((e) => {
-	//     creds;
-	//     debugger;
-	//     console.error(`ERROR GETTING CUSTOM PROPS!`)
-	//     console.error(`${e.message} : ${e.response.data.error}`)
-	//     process.exit(1)
-	// })).data.results
-
-	// let dataDfns = [...dataDfnsEvents, ...dataDfnsUsers].filter(p => p.status === 'custom')
-
 	return res;
 
 };
 
-// SETTERS
+/*
+-------
+SETTERS
+-------
+*/
+
 exports.postSchema = async function (creds, schema) {
 	let { acct: username, pass: password, project, region } = creds;
 
@@ -475,8 +505,9 @@ exports.postSchema = async function (creds, schema) {
 	return res.data.results;
 };
 
-//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
+
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
+	//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
 	let { acct: username, pass: password, workspace, project, region } = targetCreds;
 	let results = [];
 
@@ -488,21 +519,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 	createCohorts: for (const cohort of cohorts) {
 		let failed = false;
 		//get rid of disallowed keys
-		delete cohort.count;
-		delete cohort.created_by;
-		delete cohort.data_group_id;
-		delete cohort.id;
-		delete cohort.last_edited;
-		delete cohort.last_queried;
-		delete cohort.referenced_by;
-		delete cohort.referenced_directly_by;
-		delete cohort.active_integrations;
-		delete cohort.can_update_basic;
-		delete cohort.can_view;
-		delete cohort.allow_staff_override;
-		delete cohort.is_superadmin;
-		delete cohort.can_share;
-		delete cohort.can_update_restricted;
+		blacklistKeys.forEach(key => delete cohort[key]);
 
 		let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
 			method: `post`,
@@ -512,13 +529,13 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 		}).catch((e) => {
 			failed = true;
 			cohort;
-			debugger;
 			console.error(`ERROR CREATING COHORT!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 		});
 
-		results.push(createdCohort.data.results);
+		results.push(createdCohort?.data?.results);
 
 		if (failed) {
 			continue createCohorts;
@@ -542,20 +559,8 @@ exports.makeCustomProps = async function (creds, custProps) {
 	let customProperties = clone(custProps);
 	loopCustomProps: for (const custProp of customProperties) {
 		let failed = false;
-		//get rid of disallowed keys       
-		delete custProp.user;
-		delete custProp.created;
-		delete custProp.customPropertyId;
-		delete custProp.allow_staff_override;
-		delete custProp.can_share;
-		delete custProp.can_update_basic;
-		delete custProp.can_view;
-		delete custProp.canUpdateBasic;
-		delete custProp.modified;
-		delete custProp.referencedBy;
-		delete custProp.referencedDirectlyBy;
-		delete custProp.referencedRawEventProperties;
-		delete custProp.project;
+		//get rid of disallowed keys 
+		blacklistKeys.forEach(key => delete custProp[key]);
 
 		//get rid of null keys
 		for (let key in custProp) {
@@ -576,9 +581,10 @@ exports.makeCustomProps = async function (creds, custProps) {
 		}).catch((e) => {
 			failed = true;
 			custProp;
-			debugger;
+
 			console.error(`ERROR MAKING CUST PROP! ${custProp.name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 
 		});
@@ -628,9 +634,9 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 		}).catch((e) => {
 			failed = true;
 			name;
-			debugger;
 			console.error(`ERROR MAKING CUST EVENT! ${name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response.data.error.includes('already exists')) debugger;
 			return {};
 		});
 
@@ -657,13 +663,17 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 
 //TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
-	let { acct: username, pass: password, project, workspace, region } = targetCreds;
-
-	let results = {
+	const { acct: username, pass: password, project, workspace, region } = targetCreds;
+	let dashCount = -1;
+	const OGDashes = clone(dashes);
+	const results = {
 		dashes: [],
 		reports: [],
 		shares: [],
-		pins: []
+		pins: [],
+		text: [],
+		media: [],
+		layoutUpdates: [],
 	};
 
 	//match old and new custom entities by subbing olds Ids for new ones
@@ -679,38 +689,29 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		newDashes = substitue(dashes);
 	}
 
+	if (!newDashes) newDashes = dashes;
+
 	loopDash: for (const dash of newDashes) {
 		let failed = false;
+		dashCount++;
 		//copy all child reports metadatas
-		let reports = [];
-		for (let reportId in dash.SAVED_REPORTS) {
-			reports.push(dash.SAVED_REPORTS[reportId]);
+		const reports = [];
+		const media = [];
+		const text = [];
+		const layout = dash.LAYOUT;
+
+		for (let reportId in dash.REPORTS) {
+			reports.push(dash.REPORTS[reportId]);
+		}
+		for (let mediaId in dash.MEDIA) {
+			media.push(dash.MEDIA[mediaId]);
+		}
+		for (let textId in dash.TEXT) {
+			text.push(dash.TEXT[textId]);
 		}
 
 		//get rid of disallowed keys (this is backwards; u shuld whitelist)
-		delete dash.SAVED_REPORTS;
-		delete dash.id;
-		delete dash.is_private;
-		delete dash.creator;
-		delete dash.creator_id;
-		delete dash.creator_name;
-		delete dash.creator_email;
-		delete dash.is_restricted;
-		delete dash.modified;
-		delete dash.is_favorited;
-		delete dash.pinned_date;
-		delete dash.generation_type;
-		delete dash.layout_version;
-		delete dash.can_see_grid_chameleon;
-		delete dash.can_update_basic;
-		delete dash.can_view;
-		delete dash.allow_staff_override;
-		delete dash.is_superadmin;
-		delete dash.can_share;
-		delete dash.can_pin_dashboards;
-		delete dash['can_update_restricted'];
-		delete dash['can_update_visibility'];
-		delete dash['created'];
+		blacklistKeys.forEach(key => delete dash[key]);
 
 		//get rid of null keys
 		for (let key in dash) {
@@ -739,21 +740,29 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			dash;
 			results;
 			matchedEntities;
-			debugger;
 			console.error(`ERROR MAKING DASH! ${dash.title}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			if (!e.response?.data?.error?.includes('already exists')) debugger;
 			return {};
 
 		});
 		results.dashes.push(createdDash?.data?.results);
+
 		if (failed) {
 			continue loopDash;
 		}
-		//use dash id to make reports
+		//stash the old layout
+		const oldDashLayout = OGDashes[dashCount].LAYOUT;
+
+		//use new dash id to make reports
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
-		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts);
+		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts, oldDashLayout);
+		const createdMedia = await makeMedia(targetCreds, media, oldDashLayout);
+		const createdText = await makeText(targetCreds, text, oldDashLayout);
 		results.reports.push(createdReports);
+		results.media.push(createdMedia);
+		results.text.push(createdText);
 
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
@@ -763,9 +772,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			data: sharePayload
 		}).catch((e) => {
 			sharePayload;
-			debugger;
 			console.error(`ERROR SHARING DASH!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
 		});
 
 		results.shares.push(sharedDash);
@@ -781,14 +790,38 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
 		results.pins.push(pinnedDash);
 
+		// UPDATE LAYOUT
+		const allCreatedEntities = [...results.reports, ...results.media, ...results.text].flat();
+		const mostRecentNewDashLayout = allCreatedEntities.slice(-1).pop().results.layout;
+		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
+		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: JSON.stringify(matchedDashLayout)
+		}).catch((e) => {
+			matchedDashLayout;
+			console.error(`ERROR UPDATING DASH LAYOUT!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {}
+		});
+
+		results.layoutUpdates.push(layoutUpdate);
 	}
 
 	results.reports = results.reports.flat();
+	results.media = results.media.flat();
+	results.text = results.text.flat();
+	results.layoutUpdates = results.layoutUpdates.flat();
 	return results;
 };
 
+/*
+-----------
+DATA EXPORT
+-----------
+*/
 
-// EXPORT
 exports.exportAllEvents = async function (source) {
 	const startDate = dayjs(source.start).format(dateFormat);
 	const endDate = dayjs().format(dateFormat);
@@ -868,7 +901,6 @@ exports.exportAllProfiles = async function (source, target) {
 			data: encodedParams
 		})).data;
 
-
 		profiles = response.results.map(function (person) {
 			return {
 				"$token": target.token,
@@ -892,266 +924,9 @@ exports.exportAllProfiles = async function (source, target) {
 
 };
 
-// INGESTION
-// https://github.com/ak--47/mixpanel-import#credentials
-exports.sendEvents = async function (source, target, transform) {
-	const data = path.resolve(`${source.localPath}/exports/events.ndjson`);
-	const creds = {
-		acct: target.acct,
-		pass: target.pass,
-		project: target.project,
-		token: target.token
-	};
-
-	const options = {
-		recordType: `event`, //event, user, OR group
-		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
-		region: `US`, //US or EU
-		recordsPerBatch: 2000, //max # of records in each batch
-		bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
-		strict: true, //use strict mode?
-		logs: true, //print to stdout?
-		transformFunc: transform
-	};
-	const importedData = await mpImport(creds, data, options);
-
-	return importedData;
-};
-
-exports.sendProfiles = async function (source, target, transform) {
-	const data = path.resolve(`${source.localPath}/exports/profiles/`);
-	const creds = {
-		acct: target.acct,
-		pass: target.pass,
-		project: target.project,
-		token: target.token
-	};
-
-	const options = {
-		recordType: `user`, //event, user, OR group
-		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
-		region: `US`, //US or EU
-		recordsPerBatch: 1000, //max # of records in each batch
-		logs: true, //print to stdout?
-		transformFunc: transform
-	};
-	const importedData = await mpImport(creds, data, options);
-
-	return importedData;
-};
-
-
-// UTILS
-const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
-	let results = [];
-	loopReports: for (const report of reports) {
-		let failed = false;
-
-		report.global_access_type = "on";
-
-		//get rid of disallowed keys
-		delete report.id;
-		delete report.project_id;
-		delete report.workspace_id;
-		delete report.original_type;
-		delete report.include_in_dashboard;
-		delete report.is_default;
-		delete report.creator;
-		delete report.creator_id;
-		delete report.creator_name;
-		delete report.creator_email;
-		delete report.generation_type;
-		delete report.created;
-		delete report.modified;
-		delete report.metadata;
-		delete report.dashboard;
-		delete report.is_visibility_restricted;
-		delete report.is_modification_restricted;
-		delete report.can_update_basic;
-		delete report.can_view;
-		delete report.can_share;
-		delete report.allow_staff_override;
-		delete report.is_superadmin;
-		delete report.can_update_restricted;
-
-		//null values make mixpanel unhappy; delete them too
-		for (let key in report) {
-			if (report[key] === null) {
-				delete report[key];
-			}
-		}
-
-		//unsure why? ... but you gotta do it.
-		report.params = JSON.stringify(report.params);
-
-		const payload = {
-			"content": {
-				"action": "create",
-				"content_type": "report",
-				"content_params": {
-					"bookmark": report
-				}
-			}
-		};
-
-		let createdReport = await fetch(URLs.makeReport(workspace, dashId, region), {
-			method: `patch`,
-			auth: { username, password },
-			data: payload
-
-		}).catch((e) => {
-			failed = true;
-			report;
-			results;
-			debugger;
-			console.error(`ERROR CREATING REPORT!`);
-			console.error(`${e.message} : ${e.response.data.error}`);
-			return {};
-		});
-		results.push(createdReport);
-		if (failed) {
-			continue loopReports;
-		}
-	}
-
-
-	return results;
-};
-
-const removeNulls = function (obj) {
-	function isObject(val) {
-		if (val === null) { return false; }
-		return ((typeof val === 'function') || (typeof val === 'object'));
-	}
-
-	const isArray = obj instanceof Array;
-
-	for (var k in obj) {
-		// falsy values
-		if (!Boolean(obj[k])) {
-			isArray ? obj.splice(k, 1) : delete obj[k];
-		}
-
-		// empty arrays
-		if (Array.isArray(obj[k]) && obj[k]?.length === 0) {
-			delete obj[k];
-		}
-
-		// empty objects
-		if (isObject(obj[k])) {
-			if (JSON.stringify(obj[k]) === '{}') {
-				delete obj[k];
-			}
-		}
-
-		// recursion
-		if (isObject(obj[k])) {
-			removeNulls(obj[k]);
-		}
-	}
-};
-
-const changeFactory = function (sourceId = "", targetId = "") {
-
-	return function changeValue(obj) {
-		let source = JSON.stringify(obj);
-		let target = source.split(sourceId).join(targetId);
-		return JSON.parse(target);
-	};
-};
-
-const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
-	let sourceCohortList = [];
-
-	if (sourceCreds) {
-		const { projId, workspace, acct, pass, region } = sourceCreds;
-		sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
-			method: `POST`,
-			auth: { username: acct, password: pass }
-		})).data;
-
-	}
-	let results = {
-		cohorts: [],
-		custEvents: [],
-		custProps: []
-	};
-
-
-	sourceEntities.cohorts = sourceCohortList;
-
-	//iterate through all source types and produce mappings of source and target
-	let entityTypes = Object.keys(sourceEntities);
-	for (const type of entityTypes) {
-		for (const [index, entity] of Object.entries(sourceEntities[type])) {
-			let template = {
-				name: entity.name,
-				sourceId: sourceEntities[type][index]?.id || sourceEntities[type][index]?.customPropertyId,
-				targetId: targetEntities[type][index]?.id || targetEntities[type][index]?.customPropertyId,
-			};
-			results[type].push(template);
-		}
-	}
-
-	return results;
-};
-
-//https://stackoverflow.com/a/45287523
-const renameKeys = function (obj, newKeys) {
-	const keyValues = Object.keys(obj).map(key => {
-		const newKey = newKeys[key] || key;
-		return {
-			[newKey]: obj[key]
-		};
-	});
-	return Object.assign({}, ...keyValues);
-};
-
-const writeFile = async function (filename, data) {
-	await fs.writeFile(filename, data);
-};
-
-const json = function (data) {
-	return JSON.stringify(data, null, 2);
-};
-
-// https://stackoverflow.com/a/41951007
-const clone = function (thing, opts) {
-	var newObject = {};
-	if (thing instanceof Array) {
-		return thing.map(function (i) { return clone(i, opts); });
-	} else if (thing instanceof Date) {
-		return new Date(thing);
-	} else if (thing instanceof RegExp) {
-		return new RegExp(thing);
-	} else if (thing instanceof Function) {
-		return opts && opts.newFns ?
-			new Function('return ' + thing.toString())() :
-			thing;
-	} else if (thing instanceof Object) {
-		Object.keys(thing).forEach(function (key) {
-			newObject[key] = clone(thing[key], opts);
-		});
-		return newObject;
-	} else if ([undefined, null].indexOf(thing) > -1) {
-		return thing;
-	} else {
-		if (thing.constructor.name === 'Symbol') {
-			return Symbol(thing.toString()
-				.replace(/^Symbol\(/, '')
-				.slice(0, -1));
-		}
-		// return _.clone(thing);  // If you must use _ ;)
-		return thing.__proto__.constructor(thing);
-	}
-};
-
-
-// QUERY
 exports.getProjCount = async function (source, type) {
 	const startDate = dayjs(source.start).format(dateFormat);
-	const endDate = dayjs().format(dateFormat);
+	const endDate = dayjs(source.end).format(dateFormat);
 	let payload;
 	if (type === `events`) {
 		payload = {
@@ -1309,13 +1084,517 @@ exports.getProjCount = async function (source, type) {
 		console.error('ERROR GETTING COUNTS!');
 		console.error(`${e.message} : ${e.response.data.error}`);
 
-
 	}
-
 };
 
 
-// MISC
+/*
+----------
+DATA IMPORT
+https://github.com/ak--47/mixpanel-import#credentials
+----------
+*/
+
+exports.sendEvents = async function (source, target, transform) {
+	const data = path.resolve(`${source.localPath}/exports/events.ndjson`);
+	const creds = {
+		acct: target.acct,
+		pass: target.pass,
+		project: target.project,
+		token: target.token
+	};
+
+	const options = {
+		recordType: `event`, //event, user, OR group
+		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
+		region: `US`, //US or EU
+		recordsPerBatch: 2000, //max # of records in each batch
+		bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
+		strict: true, //use strict mode?
+		logs: true, //print to stdout?
+		transformFunc: transform
+	};
+	const importedData = await mpImport(creds, data, options);
+
+	return importedData;
+};
+
+exports.sendProfiles = async function (source, target, transform) {
+	const data = path.resolve(`${source.localPath}/exports/profiles/`);
+	const creds = {
+		acct: target.acct,
+		pass: target.pass,
+		project: target.project,
+		token: target.token
+	};
+
+	const options = {
+		recordType: `user`, //event, user, OR group
+		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
+		region: `US`, //US or EU
+		recordsPerBatch: 1000, //max # of records in each batch
+		logs: true, //print to stdout?
+		transformFunc: transform
+	};
+	const importedData = await mpImport(creds, data, options);
+
+	return importedData;
+};
+
+
+/*
+-------------
+REPORT MAKERS
+-------------
+*/
+const makeMedia = async function (creds, media = [], oldDashLayout) {
+	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let results = [];
+	const OGMedia = clone(media);
+	let mediaCount = -1;
+	loopMedia: for (const mediaItem of media) {
+		let failed = false;
+		mediaCount++;
+
+		const mediaCreate = { "content": { "action": "create", "content_type": "media", "content_params": { "media_type": "", "service": "", "path": "" } } };
+		const createMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: mediaCreate
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			mediaItem;
+			results;
+			debugger;
+			console.error(`ERROR CREATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			return {};
+		});
+
+		if (failed) continue loopMedia;
+		const createdMediaCardId = createMediaCard.data.results.new_content.id;
+
+		//get rid of disallowed keys
+		blacklistKeys.forEach(key => delete mediaItem[key]);
+
+		//null values make mixpanel unhappy; delete them too
+		for (let key in mediaItem) {
+			if (mediaItem[key] === null) {
+				delete mediaItem[key];
+			}
+		}
+
+		const payload = {
+			"content":
+			{
+				"action": "update",
+				"content_id": createdMediaCardId,
+				"content_type": "media",
+				"content_params": mediaItem
+			}
+		};
+
+		let updatedMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: payload
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			results;
+			console.error(`ERROR UPDATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+
+		if (!failed) {
+			const oldId = OGMedia[mediaCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			updatedMediaCard.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = updatedMediaCard.data.results.layout.rows[updatedMediaCard.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			updatedMediaCard.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(updatedMediaCard?.data || updatedMediaCard);
+		if (failed) {
+			continue loopMedia;
+		}
+	}
+
+
+	return results;
+};
+
+const makeText = async function (creds, text = [], oldDashLayout) {
+	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let results = [];
+	const OGText = clone(text);
+	let textCount = -1;
+	loopText: for (const textCard of text) {
+		let failed = false;
+		textCount++;
+
+		const textCreate = { "content": { "action": "create", "content_type": "text", "content_params": { "markdown": "" } } };
+		const createTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: textCreate
+
+		}).catch((e) => {
+			failed = true;
+			textCard;
+			results;
+			console.error(`ERROR CREATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+
+		if (failed) continue loopText;
+		const createdTextCardId = createTextCard.data.results.new_content.id;
+
+		//get rid of disallowed keys
+		blacklistKeys.forEach(key => delete textCard[key]);
+
+		//null values make mixpanel unhappy; delete them too
+		for (let key in textCard) {
+			if (textCard[key] === null) {
+				delete textCard[key];
+			}
+		}
+
+		const payload = {
+			"content":
+			{
+				"action": "update",
+				"content_id": createdTextCardId,
+				"content_type": "text",
+				"content_params": textCard
+			}
+		};
+
+		let updatedTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: payload
+
+		}).catch((e) => {
+			failed = true;
+			media;
+			results;
+			console.error(`ERROR UPDATING MEDIA CARD!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+
+		if (!failed) {
+			const oldId = OGText[textCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			updatedTextCard.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = updatedTextCard.data.results.layout.rows[updatedTextCard.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			updatedTextCard.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(updatedTextCard?.data || updatedTextCard);
+		if (failed) {
+			continue loopText;
+		}
+	}
+
+	return results;
+};
+
+const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
+	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let results = [];
+	const OGReport = clone(reports);
+	let reportCount = -1;
+	loopReports: for (const report of reports) {
+		let failed = false;
+		reportCount++;
+		// report.global_access_type = "on";
+
+		//get rid of disallowed keys
+		blacklistKeys.forEach(key => delete report[key]);
+
+		//null values make mixpanel unhappy; delete them too
+		for (let key in report) {
+			if (report[key] === null) {
+				delete report[key];
+			}
+		}
+		if (!report.description) report.description = report.name;
+
+		//unsure why? ... but you gotta do it.
+		report.params = JSON.stringify(report.params);
+
+		const payload = {
+			"content": {
+				"action": "create",
+				"content_type": "report",
+				"content_params": {
+					"bookmark": report
+				}
+			}
+		};
+
+		let createdReport = await fetch(URLs.makeReport(workspace, dashId, region), {
+			method: `patch`,
+			auth: { username, password },
+			data: payload
+
+		}).catch((e) => {
+			failed = true;
+			report;
+			results;
+			console.error(`ERROR CREATING REPORT!`);
+			console.error(`${e.message} : ${e.response.data.error}`);
+			debugger;
+			return {};
+		});
+
+		if (!failed) {
+			const oldId = OGReport[reportCount].id;
+			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			createdReport.data.oldLayout = {
+				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
+				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
+				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
+			};
+
+			const layout = createdReport.data.results.layout.rows[createdReport.data.results.layout.order.slice(-1).pop()].cells[0];
+
+			createdReport.data.newLayout = {
+				content_id: layout.content_id,
+				id: layout.id,
+				content_type: layout.content_type
+			};
+		}
+
+		results.push(createdReport?.data || createdReport);
+		if (failed) {
+			continue loopReports;
+		}
+	}
+
+
+	return results;
+};
+
+/*
+--------------------
+PAYLOAD MANIPULATORS
+--------------------
+*/
+
+const reconcileLayouts = function (oldDash, newDash, newDashItems) {
+	const mappedLayout = newDashItems.map(item => {
+		return {
+			ids: item.newLayout, layout: item.oldLayout
+		};
+	});
+	const currentDashLayout = newDashItems.slice(-1).pop().results.layout.rows;
+	const newLayout = {
+		rows_order: [],
+		rows: [] //rows: {}
+	};
+
+	const numRows = oldDash.order.length;
+	const newRows = newDash.order.slice();	//slice(0, numRows);
+	newLayout.rows_order = [...newRows];
+
+	for (const [index, rowId] of Object.entries(newRows)) {
+		let rowTemplate = {
+			cells: [],
+			height: 0,
+			id: rowId
+		};
+	
+		const itemsInRow = mappedLayout
+			.filter(item => item.layout.rowNumber == index)
+			.sort((a, b) => a.layout.cellNumber - b.layout.cellNumber);
+
+		if (itemsInRow.length > 0) {
+
+			//carefully place the card with the source layout settings but the target ids
+			for (const card of itemsInRow) {
+				rowTemplate.cells.push({
+					//these two keys verify the match but are not required in the payload
+					//content_id: card.ids.content_id,
+					//content_type: card.ids.content_type,
+					id: card.ids.id,
+					width: card.layout.width
+				});
+			}			
+		}
+
+		newLayout.rows.push(rowTemplate)
+
+	}
+	
+	return { layout: newLayout };
+
+};
+
+const matchCustomEntities = async function (sourceCreds, sourceEntities, targetEntities) {
+	let sourceCohortList = [];
+
+	if (sourceCreds) {
+		const { projId, workspace, acct, pass, region } = sourceCreds;
+		sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
+			method: `POST`,
+			auth: { username: acct, password: pass }
+		})).data;
+
+	}
+	let results = {
+		cohorts: [],
+		custEvents: [],
+		custProps: []
+	};
+
+	sourceEntities.cohorts = sourceCohortList;
+
+	//iterate through all source types and produce mappings of source and target
+	let entityTypes = Object.keys(sourceEntities);
+	for (const type of entityTypes) {
+		for (const [index, entity] of Object.entries(sourceEntities[type])) {
+			let template = {
+				name: entity.name,
+				sourceId: sourceEntities[type][index]?.id || sourceEntities[type][index]?.customPropertyId,
+				targetId: targetEntities[type][index]?.id || targetEntities[type][index]?.customPropertyId,
+			};
+			results[type].push(template);
+		}
+	}
+
+	return results;
+};
+
+const removeNulls = function (obj) {
+	function isObject(val) {
+		if (val === null) { return false; }
+		return ((typeof val === 'function') || (typeof val === 'object'));
+	}
+
+	const isArray = obj instanceof Array;
+
+	for (var k in obj) {
+		// falsy values
+		if (!Boolean(obj[k])) {
+			isArray ? obj.splice(k, 1) : delete obj[k];
+		}
+
+		// empty arrays
+		if (Array.isArray(obj[k]) && obj[k]?.length === 0) {
+			delete obj[k];
+		}
+
+		// empty objects
+		if (isObject(obj[k])) {
+			if (JSON.stringify(obj[k]) === '{}') {
+				delete obj[k];
+			}
+		}
+
+		// recursion
+		if (isObject(obj[k])) {
+			removeNulls(obj[k]);
+		}
+	}
+};
+
+const changeFactory = function (sourceId = "", targetId = "") {
+
+	return function changeValue(obj) {
+		let source = JSON.stringify(obj);
+		let target = source.split(sourceId).join(targetId);
+		return JSON.parse(target);
+	};
+};
+
+const renameKeys = function (obj, newKeys) {
+	//https://stackoverflow.com/a/45287523
+	const keyValues = Object.keys(obj).map(key => {
+		const newKey = newKeys[key] || key;
+		return {
+			[newKey]: obj[key]
+		};
+	});
+	return Object.assign({}, ...keyValues);
+};
+
+// https://stackoverflow.com/a/41951007
+const clone = function (thing, opts) {
+	var newObject = {};
+	if (thing instanceof Array) {
+		return thing.map(function (i) { return clone(i, opts); });
+	} else if (thing instanceof Date) {
+		return new Date(thing);
+	} else if (thing instanceof RegExp) {
+		return new RegExp(thing);
+	} else if (thing instanceof Function) {
+		return opts && opts.newFns ?
+			new Function('return ' + thing.toString())() :
+			thing;
+	} else if (thing instanceof Object) {
+		Object.keys(thing).forEach(function (key) {
+			newObject[key] = clone(thing[key], opts);
+		});
+		return newObject;
+	} else if ([undefined, null].indexOf(thing) > -1) {
+		return thing;
+	} else {
+		if (thing.constructor.name === 'Symbol') {
+			return Symbol(thing.toString()
+				.replace(/^Symbol\(/, '')
+				.slice(0, -1));
+		}
+		// return _.clone(thing);  // If you must use _ ;)
+		return thing.__proto__.constructor(thing);
+	}
+};
+
+
+/*
+-----------------
+MISC UTILITIES
+-----------------
+*/
+
+const writeFile = async function (filename, data) {
+	await fs.writeFile(filename, data);
+};
+
+const json = function (data) {
+	return JSON.stringify(data, null, 2);
+};
+
 exports.comma = function (x) {
 	try {
 		return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -1337,8 +1616,31 @@ const openExplorerinMac = function (path, callback) {
 	});
 };
 
+function log(message, data, hasResponse = false) {
 
-// SUMMARIES
+	if (message) {
+		console.log(message);
+		// logs += `${message}`;
+		if (!hasResponse) {
+			console.log('\n');
+			// logs += `\n`;
+		}
+	}
+
+	if (data) {
+		console.log('\n');
+		console.log(JSON.stringify(data, null, 2));
+		// logs += `${JSON.stringify(data, null, 2)}`;
+		console.log('\n');
+	}
+}
+
+
+/*
+------------------
+SUMMARY GENERATORS
+------------------
+*/
 exports.saveLocalSummary = async function (projectMetaData) {
 	const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData;
 	const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
@@ -1438,11 +1740,11 @@ ${summary}\n\n`;
 };
 
 const makeDashSummary = function (dashes) {
-	dashes = dashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+	dashes = dashes.filter(dash => Object.keys(dash.REPORTS).length > 0);
 	const summary = dashes.map((dash) => {
 		return `\t• DASH "${dash.title}" (${dash.id})\n\t${dash.description} (created by: ${dash.creator_email})
 
-${makeReportSummaries(dash.SAVED_REPORTS)}`;
+${makeReportSummaries(dash.REPORTS)}`;
 	}).join('\n');
 	return `DASHBOARDS\n
 ${summary}
@@ -1475,23 +1777,3 @@ const makeReportSummaries = function (reports) {
 
 	return summary;
 };
-
-
-function log(message, data, hasResponse = false) {
-
-	if (message) {
-		console.log(message);
-		// logs += `${message}`;
-		if (!hasResponse) {
-			console.log('\n');
-			// logs += `\n`;
-		}
-	}
-
-	if (data) {
-		console.log('\n');
-		console.log(JSON.stringify(data, null, 2));
-		// logs += `${JSON.stringify(data, null, 2)}`;
-		console.log('\n');
-	}
-}

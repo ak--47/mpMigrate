@@ -6,20 +6,30 @@
 // https://github.com/ak--47/mpMigrate
 // 
 
-//todo: local time to project time
+/*
+-------
+TODOS:
+	allow specifiying of dash, cohort, custom prop/event ids in source
+	dashboard filters with custom props
+	custom events with custom props
+-------
+*/
 
 require('dotenv').config();
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');
 let logs = ``;
-
+const dayjs = require('dayjs');
+const dateFormat = `YYYY-MM-DD`;
+const deep = require('deep-object-diff');
 
 async function main(
 	source = {
 		acct: "",
 		pass: "",
 		project: 1234,
-		start: `01-01-2022`,
+		start: dayjs().format(dateFormat),
+		end: dayjs().format(dateFormat),
 		region: `US`
 	},
 	target = {
@@ -34,8 +44,18 @@ async function main(
 		shouldGenerateSummary: null,
 		shouldCopyEvents: null,
 		shouldCopyProfiles: null,
-		shouldCopyEntities: null
+		shouldCopyEntities: null,
+		silent: false,
+		skipPrompt: false,
 	}) {
+
+	global.SILENT = opts.silent || false;
+
+	/*
+	-------
+	WELCOME
+	-------
+	*/
 
 	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
 		(by AK) v1.08
@@ -77,6 +97,12 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 
 	time('migrate', 'start');
 
+	/*
+	-------
+	FETCH SOURCE
+	-------
+	*/
+
 	//SOURCE
 	//validate service account & get workspace id
 	log(`validating source service account...`, null, true);
@@ -87,11 +113,11 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	source = { ...sourceWorkspace, ...source };
 	log(`	... 👍 looks good`);
 
-	let numEvents, numProfiles, sourceSchema, sourceCustEvents, sourceCustProps, sourceCohorts, sourceDashes, sourceFoundReports, sourceEmptyDashes;
+	let numEvents, numProfiles, sourceSchema, sourceCustEvents, sourceCustProps, sourceCohorts, sourceDashes, sourceFoundReports, sourceFoundMedia, sourceFoundText, sourceEmptyDashes;
 
 	// get all events
 	if (copyEvents || generateSummary) {
-		log(`querying project for events since ${source.start}`, null, true);
+		log(`querying project for events since ${source.start} to ${source.end}`, null, true);
 		numEvents = await u.getProjCount(source, `events`);
 		log(`	... 👍 found ${u.comma(numEvents)} events`);
 	}
@@ -131,21 +157,45 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 		//for each dashboard, get metadata for every child report
 		log(`querying reports metadata...`, null, true);
 		sourceFoundReports = 0;
+		sourceFoundMedia = 0;
+		sourceFoundText = 0;
 		for (const [index, dash] of sourceDashes.entries()) {
-			let dashReports = await u.getDashReports(source, dash.id);
-			sourceFoundReports += Object.keys(dashReports).length;
+			let dashMeta = await u.getDashReports(source, dash.id);
+			sourceFoundReports += Object.keys(dashMeta.reports).length;
+			sourceFoundMedia += Object.keys(dashMeta.media).length;
+			sourceFoundText += Object.keys(dashMeta.text).length;
 
 			//store report metadata for later
-			sourceDashes[index].SAVED_REPORTS = dashReports;
+			sourceDashes[index].REPORTS = dashMeta.reports;
+			// TODO: adjust TEXT, MEDIA, and LAYOUT
+			sourceDashes[index].MEDIA = dashMeta.media;
+			sourceDashes[index].TEXT = dashMeta.text;
+			sourceDashes[index].LAYOUT = dashMeta.layout;
 
 		}
-		log(`	... 👍 found ${u.comma(sourceFoundReports)} reports`);
+		log(`	... 👍 found ${u.comma(sourceFoundReports)} reports, ${u.comma(sourceFoundMedia)} media objects, ${u.comma(sourceFoundText)} text cards`);
 
 		//filter out empty dashboards
 		log(`checking for empty dashboards...`, null, true);
-		sourceEmptyDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length === 0);
-		log(`	... found ${u.comma(sourceEmptyDashes.length)} dashboards ${sourceEmptyDashes.length > 0 ? '(these will NOT be copied)' : ''}`);
-		sourceDashes = sourceDashes.filter(dash => Object.keys(dash.SAVED_REPORTS).length > 0);
+		sourceEmptyDashes = sourceDashes.filter(dash => {
+			const sum = Object.keys(dash.REPORTS).length + Object.keys(dash.MEDIA).length + Object.keys(dash.TEXT).length;
+			return sum === 0;
+		});
+		if (sourceEmptyDashes.length > 0) {
+			log(`	... found ${u.comma(sourceEmptyDashes.length)} empty dashboards; (these will NOT be copied)`);
+			sourceDashes = sourceDashes
+				.filter(dash => {
+					return !sourceEmptyDashes
+						.some(emptyDash => {
+							return JSON.stringify(dash) === JSON.stringify(emptyDash);
+						});
+				});
+		}
+		else {
+			log(`	... found 0 empty dashboards`);
+		}
+
+
 	}
 
 	if (generateSummary) {
@@ -175,7 +225,9 @@ ${u.comma(sourceCustEvents.length)} custom events
 ${u.comma(sourceCustProps.length)} custom props
 ${u.comma(sourceCohorts.length)} cohorts
 ${u.comma(sourceDashes.length)} dashboards
-${u.comma(sourceFoundReports)} reports`;
+${u.comma(sourceFoundReports)} reports
+${u.comma(sourceFoundMedia)} media objects
+${u.comma(sourceFoundText)} text cards`;
 	}
 
 
@@ -188,7 +240,7 @@ ${intentString}
 from project: ${source.project} to project: ${target.project}	
 
 `);
-	let shouldContinue = await u.userPrompt(null, null, true);
+	let shouldContinue = opts.skipPrompt ? true : await u.userPrompt(null, null, true);
 
 	if (!shouldContinue) {
 		log(`aborting...`);
@@ -199,6 +251,12 @@ from project: ${source.project} to project: ${target.project}
 		log(`no target project specified, exiting...`);
 		process.exit(0);
 	}
+
+	/*
+	-------
+	WRITE TO TARGET
+	-------
+	*/
 
 	log(`\nPROCEEDING WITH COPY!\n`);
 
@@ -272,9 +330,9 @@ from project: ${source.project} to project: ${target.project}
 		}
 
 		try {
-			log(`creating ${sourceDashes.length} dashboards & ${sourceFoundReports} reports...`, null, true);
+			log(`creating ${sourceDashes.length} dashboards with...\n\t${sourceFoundReports} reports\n\t${sourceFoundMedia} media object\n\t${sourceFoundText} text cards`, null, true);
 			targetDashes = await u.makeDashes(source, target, sourceDashes, sourceCustEvents, sourceCustProps, sourceCohorts, targetCustEvents, targetCustProps, targetCohorts);
-			log(`	... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n	... 👍 created ${targetDashes.reports.length} reports`);
+			log(`\t... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n\t... 👍 created ${targetDashes.reports.length} reports\n\t... 👍 created ${targetDashes.media.length} media objects\n\t... 👍 created ${targetDashes.text.length} text cards`);
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create dashboards`);
@@ -282,6 +340,12 @@ from project: ${source.project} to project: ${target.project}
 		}
 
 	}
+
+	/*
+	-------
+	WRITE LOGS
+	-------
+	*/
 
 	const everyThingTheScriptDid = {
 		source,
@@ -305,13 +369,22 @@ from project: ${source.project} to project: ${target.project}
 	time(`migrate`, `stop`);
 	//write logs
 	await u.writeFile(`${dataFolder}/log.txt`, logs);
+	await u.writeFile(`${dataFolder}/rawLog.json`, JSON.stringify(everyThingTheScriptDid, null, 2));
 
 	return everyThingTheScriptDid;
 }
 
 
-function log(message, data, hasResponse = false) {
+/*
+-------
+UTILS
+-------
+*/
 
+function log(message, data, hasResponse = false) {
+	if (SILENT) {
+		return;
+	}
 	if (message) {
 		console.log(message);
 		logs += `${message}`;

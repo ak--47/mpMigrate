@@ -9,8 +9,9 @@ essentially, this utility can **copy** most saved entities in any mixpanel proje
  - events
  - user profiles
  - schemas (lexicon)
- - dashboards
- - saved reports
+ - dashboards (and layouts)
+	- saved reports
+	- text and media cards
  - custom events
  - custom properties
 
@@ -33,7 +34,7 @@ currently **not** supported:
  - user invites
  - session/group keys/timezone and other global project settings
  - saved entity permissions (defaults to global access to all users)
- - text cards on dashboards
+
 
 ## tldr;
 supply credentials:
