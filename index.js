@@ -22,6 +22,9 @@ let logs = ``;
 const dayjs = require('dayjs');
 const dateFormat = `YYYY-MM-DD`;
 const deep = require('deep-object-diff');
+const ak = require('ak-tools');
+const track = ak.tracker('mp-migrate');
+const runId = ak.uid(32);
 
 async function main(
 	source = {
@@ -96,6 +99,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	}
 
 	time('migrate', 'start');
+	track('start', {runId, ...opts});
 
 	/*
 	-------
@@ -277,6 +281,7 @@ from project: ${source.project} to project: ${target.project}
 			log(`sent ${u.comma(targetImportEvents.results.totalRecordCount)} events in ${u.comma(targetImportEvents.results.totalReqs)} requests; writing logfile...`);
 			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents.responses, null, 2));
 		} catch (e) {
+			track('error', {type: "events", runId, ...opts});
 			debugger;
 		}
 
@@ -291,6 +296,7 @@ from project: ${source.project} to project: ${target.project}
 			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing logfile...`);
 			await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2));
 		} catch (e) {
+			track('error', {type: "profiles", runId, ...opts});
 			debugger;
 		}
 
@@ -305,6 +311,7 @@ from project: ${source.project} to project: ${target.project}
 
 		catch (e) {
 			log(`	... ⛔️ failed to upload schema`);
+			track('error', {type: "schema", runId, ...opts});
 			debugger;
 		}
 
@@ -316,7 +323,9 @@ from project: ${source.project} to project: ${target.project}
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create custom events + props`);
+			track('error', {type: "custom events", runId, ...opts});
 			debugger;
+			
 		}
 
 		try {
@@ -326,6 +335,7 @@ from project: ${source.project} to project: ${target.project}
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create cohorts`);
+			track('error', {type: "cohorts", runId, ...opts});
 			debugger;
 		}
 
@@ -336,6 +346,7 @@ from project: ${source.project} to project: ${target.project}
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create dashboards`);
+			track('error', {type: "dashboards", runId, ...opts});
 			debugger;
 		}
 
@@ -367,6 +378,7 @@ from project: ${source.project} to project: ${target.project}
 
 	log(`all finished... thank you for playing the game`);
 	time(`migrate`, `stop`);
+	track('end', {runId, ...opts});
 	//write logs
 	await u.writeFile(`${dataFolder}/log.txt`, logs);
 	await u.writeFile(`${dataFolder}/rawLog.json`, JSON.stringify(everyThingTheScriptDid, null, 2));
@@ -423,7 +435,7 @@ module.exports = {
 //this allows the module to function as a standalone script
 if (require.main === module) {
 	main().then((result) => {
-		process.exit(0);
+		// process.exit(0);
 	});
 
 }
