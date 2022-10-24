@@ -160,6 +160,13 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 		log(`querying dashboards metadata...`, null, true);
 		sourceDashes = await u.getAllDash(source);
 		log(`	... 👍 found ${u.comma(sourceDashes.length)} dashboards`);
+		if (source.dash_id.length > 0) {
+			sourceDashes = sourceDashes.filter((dash) => {
+				return source.dash_id.some((specifiedId) => {
+					return specifiedId === dash.id;
+				});
+			});
+		}
 
 		//for each dashboard, get metadata for every child report
 		log(`querying reports metadata...`, null, true);
@@ -189,7 +196,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			return sum === 0;
 		});
 		if (sourceEmptyDashes.length > 0) {
-			log(`	... found ${u.comma(sourceEmptyDashes.length)} empty dashboards; (these will NOT be copied)`);
+			log(`	... 👍 found ${u.comma(sourceEmptyDashes.length)} empty dashboards; (these will NOT be copied)`);
 			sourceDashes = sourceDashes
 				.filter(dash => {
 					return !sourceEmptyDashes
@@ -214,7 +221,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			const dependentCohorts = sourceCohorts.map(cohort => cohort.id).filter(cohortId => dependentReports.some(reportString => reportString.includes(cohortId)));
 			const dependentCustEvents = sourceCustEvents.map(custEvent => custEvent.id).filter(custEventId => dependentReports.some(reportString => reportString.includes(custEventId)));
 			const depedentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
-			log(`\t... found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${depedentCustProps.length} custom prop(s) which the dashboard(s) depend on`);
+			log(`\t... 👍 found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${depedentCustProps.length} custom prop(s)\n\twhich the dashboard(s) depend on`);
 			sourceCohorts = sourceCohorts.filter((cohort) => {
 				return dependentCohorts.some(cohortId => cohortId === cohort.id);
 			});
