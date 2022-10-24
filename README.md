@@ -21,6 +21,7 @@ there are a number of use-cases for this script including:
 
  - merging projects in separate platforms (web, android, iOS) together into a common project
  - fixing immutable event data with light transformations 
+ - sending a single dashboard (or selection of dashboards) from an old to new project
  - auditing an existing project's saved entities
  - "Starting Over" without losing your work.
 
@@ -38,22 +39,41 @@ currently **not** supported:
 
 
 ## tldr;
-supply credentials:
+- create credentials file:
 ```bash
-echo "SOURCE_ACCT = '' #OLD project service account
-SOURCE_PASS = '' #OLD project service secret
-SOURCE_PROJECT = '' #OLD project id
-SOURCE_DATE_START = '' #date of first event in OLD project, eg... 04-20-2022
-SOURCE_DATE_END = '' #date of last event in OLD project, eg... 04-21-2022
-SOURCE_REGION = 'US' #US or EU
+echo "SOURCE_ACCT = '' 
+SOURCE_PASS = '' 	
+SOURCE_PROJECT = '' 
+SOURCE_DATE_START = '' 
+SOURCE_DATE_END = ''
+SOURCE_REGION = '' 	
+SOURCE_DASH_ID = '' 
 
-TARGET_ACCT = '' #NEW project service account
-TARGET_PASS = '' #NEW project secret
-TARGET_PROJECT = '' #NEW project id
-TARGET_REGION = 'US' #US OR EU" > .env
+TARGET_ACCT = '' 	
+TARGET_PASS = '' 	
+TARGET_PROJECT = ''	
+TARGET_REGION = ''" > .env
 ```
+see [CLI Usage](#CLI)  for an annotated example 
 
-then migrate
+- edit your **SOURCE** and **TARGET** environment variables according to this table:
+
+| VAR                 |  default | notes                                                       |
+|------------------------|----------------------|-------------------------------------------------------------|
+|`SOURCE_ACCT`  | --- | the service account of your SOURCE project |
+|`SOURCE_PASS`  | --- | the service account secret of your SOURCE project |
+|`SOURCE_PROJECT`  | --- | the SOURCE's `project_id` |
+|`SOURCE_DATE_START`  | TODAY | optional: if copying events - when to start `MM-DD-YYYY` |
+|`SOURCE_DATE_END`  | TODAY | if copying events - when to end `MM-DD-YYYY` |
+|`SOURCE_REGION`  | `'US'` |  `US` or `EU` |
+|`SOURCE_DASH_ID`  | --- | a `dashboard_id` (or comma sep list of `dashboard_id`s) for coping a subset of dashboards |
+|`TARGET_ACCT`  | --- | the service account of your TARGET project |
+|`TARGET_PASS`  | --- | the service account secret of your TARGET project |
+|`TARGET_PROJECT`  | --- | the TARGET project id |
+|`TARGET_REGION`  | `'US'` |  `US` or `EU` |
+
+
+- then migrate
 
 ```bash
 $ npx mp-migrate
@@ -70,17 +90,21 @@ logs are stashed in `./savedProjects/<project name>`
 in this mode, a `.env` file is used to configure the `source` and `target` projects of the form:
 
 ```bash
-SOURCE_ACCT = ''  #service account username for the source project
-SOURCE_PASS = ''  #service account secret for the source project
-SOURCE_PROJECT = ''  #source project's ID
-SOURCE_DATE_START = '' #OPTIONAL: if copying events, tell us when to start!
-SOURCE_DATE_END = '' #OPTIONAL: if coping events, tell us when to end!
-SOURCE_REGION = 'US' #either US or EU based on project's region; optional if US 
+SOURCE_ACCT = '' 		#REQ: the service account of your SOURCE project
+SOURCE_PASS = '' 		#REQ: the service account secret of your SOURCE project
+SOURCE_PROJECT = '' 	#REQ: the SOURCE project id
+SOURCE_DATE_START = '' 	#optional: if copying events - when to start MM-DD-YYYY
+SOURCE_DATE_END = ''	#optional: if copying events - when to end MM-DD-YYYY
+SOURCE_REGION = '' 		#optional: if US... mandatory if 'EU'
 
-TARGET_ACCT = ''  #service account username for target project
-TARGET_PASS = ''  #service account secret for target project
-TARGET_PROJECT = ''  #target project's ID
-TARGET_REGION = 'EU' #mandatory if project uses EU residency
+#optional: a dashboard id (or comma separated list of dashboard ids) 
+#to copy ONLY these dashboards to the target
+SOURCE_DASH_ID = '' 	
+
+TARGET_ACCT = '' 		#REQ: the service account of your TARGET project
+TARGET_PASS = '' 		#REQ: the service account secret of your TARGET project
+TARGET_PROJECT = ''		#REQ: the TARGET project id
+TARGET_REGION = ''		#optional: if US... mandatory if 'EU'
 ```
 with that configuration file present in the same directory, you can then run:
 ```bash
@@ -116,6 +140,7 @@ let source = {
 	region: "US",
 	start: "04-20-2022", //date of first event	
 	end: "04-201-2022" //date of last event
+	dash_id: ['12345', '67890'] //list of dashboards to copy
 }
 let target = {
 	acct: `{{ service acct }}`,
@@ -140,6 +165,8 @@ let options = {
 	shouldCopyEvents: false, //copy events from source to target?
 	shouldCopyProfiles: false, //copy user profiles from source to target?
 	shouldCopyEntities: true //copy saved entities from source to target?
+	silent: false, //if true, will not print console messages
+	skipPrompt: false //if true, will skip the confirmation prompt... use at own risk!
 }
 
 const migrateProjects = await projectCopy(source, target, options)
