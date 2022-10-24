@@ -13,6 +13,9 @@ const mpImport = require('mixpanel-import');
 const prompt = require('prompt');
 const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
+const u = require('ak-tools');
+const track = u.tracker('mp-migrate');
+
 // retries on 503: https://stackoverflow.com/a/64076585
 // TODO on 500, just change the report name
 axiosRetry(fetch, {
@@ -23,9 +26,23 @@ axiosRetry(fetch, {
 	},
 	retryCondition: (error) => {
 		// if retry condition is not specified, by default idempotent requests are retried
-		return error.response.status === 503;
+		return error.response.status === 503 || error.response.status === 409;
 	},
-});
+	onRetry: function (retryCount, error, requestConfig) {
+		if (error.response.status === 409) {
+		const oldEntity = JSON.parse(requestConfig.data);
+		oldEntity.name += `copy`;
+		const newEntity = JSON.stringify(oldEntity);
+		requestConfig.data = newEntity;
+		return requestConfig;
+		}
+		else {
+			track('error', {runId, ...requestConfig.data})
+			console.log('something is broken; please let AK know...')
+		}
+	}
+}
+);
 
 /*
 --------------
@@ -35,9 +52,9 @@ AUTH + STORAGE
 
 exports.getEnvCreds = function () {
 	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`);
+	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`, `SOURCE_DASH_ID`);
 	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region" };
+	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region", SOURCE_DASH_ID: "dash_id" };
 	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" };
 	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
 	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
@@ -61,6 +78,20 @@ exports.getEnvCreds = function () {
 	// region defaults
 	if (!envCredsSource.region) envCredsSource.region = `US`;
 	if (!envCredsTarget.region) envCredsTarget.region = `US`;
+
+	// dash_ids
+	if (envCredsSource.dash_id) {
+		envCredsSource.dash_id = envCredsSource.dash_id.split(",").map(a => Number(a.trim()));
+		let dashIdsValid = envCredsSource.dash_id.every((dashId) => u.is(Number, dashId) && !isNaN(dashId));
+		if (!dashIdsValid) {
+			console.log(`ERROR: your source_dash_id needs to be a number (or a comma separated list of numbers) got:`);
+			console.log(envCredsSource.dash_id.join('\t\n'));
+			console.log('\ndouble check your .env and try again');
+			process.exit(1);
+		}
+
+
+	}
 
 	return {
 		envCredsSource,
@@ -243,7 +274,7 @@ exports.userPrompt = async function (source, target, shouldContinue) {
 				...defaults
 			},
 			copyEntities: {
-				description: `do you want to COPY SAVED ENTITIES from project ${source.project} to project ${target.project}?`,
+				description: `do you want to COPY SAVED ENTITIES from project ${source.project} to project ${target.project}?${source.dash_id.length > 0 ? `\n\tNOTE: you have specified ${source.dash_id.length} dashboard(s) to copy...` : ""}`,
 				...defaults
 			}
 		}
@@ -699,6 +730,9 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const media = [];
 		const text = [];
 		const layout = dash.LAYOUT;
+		const reportResults = [];
+		const mediaResults = [];
+		const textResults = [];
 
 		for (let reportId in dash.REPORTS) {
 			reports.push(dash.REPORTS[reportId]);
@@ -760,9 +794,13 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts, oldDashLayout);
 		const createdMedia = await makeMedia(targetCreds, media, oldDashLayout);
 		const createdText = await makeText(targetCreds, text, oldDashLayout);
+		//ack ... refactor this junk
 		results.reports.push(createdReports);
+		reportResults.push(createdReports);
 		results.media.push(createdMedia);
+		mediaResults.push(createdMedia);
 		results.text.push(createdText);
+		textResults.push(createdText);
 
 		//update shares
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
@@ -791,8 +829,10 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		results.pins.push(pinnedDash);
 
 		// UPDATE LAYOUT
-		const allCreatedEntities = [...results.reports, ...results.media, ...results.text].flat();
-		const mostRecentNewDashLayout = allCreatedEntities.slice(-1).pop().results.layout;
+		const allCreatedEntities = [...reportResults, ...mediaResults, ...textResults].flat();
+		const currentDashId = results.dashes.slice().pop().id;
+		const mostRecentNewDashLayout = (await exports.getDashReports(targetCreds, currentDashId)).layout;
+		//const mostRecentNewDashLayout = Object.values(results).flat().flat().pop().results.layout;
 		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
 		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
@@ -803,7 +843,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			console.error(`ERROR UPDATING DASH LAYOUT!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
 			debugger;
-			return {}
+			return {};
 		});
 
 		results.layoutUpdates.push(layoutUpdate);
@@ -1418,7 +1458,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 			ids: item.newLayout, layout: item.oldLayout
 		};
 	});
-	const currentDashLayout = newDashItems.slice(-1).pop().results.layout.rows;
+	//const currentDashLayout = newDashItems.slice(-1).pop();
 	const newLayout = {
 		rows_order: [],
 		rows: [] //rows: {}
@@ -1434,7 +1474,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 			height: 0,
 			id: rowId
 		};
-	
+
 		const itemsInRow = mappedLayout
 			.filter(item => item.layout.rowNumber == index)
 			.sort((a, b) => a.layout.cellNumber - b.layout.cellNumber);
@@ -1450,13 +1490,13 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 					id: card.ids.id,
 					width: card.layout.width
 				});
-			}			
+			}
 		}
 
-		newLayout.rows.push(rowTemplate)
+		newLayout.rows.push(rowTemplate);
 
 	}
-	
+
 	return { layout: newLayout };
 
 };

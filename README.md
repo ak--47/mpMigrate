@@ -30,6 +30,7 @@ currently **not** supported:
 
  - identity resolution (mapping `anon_id`s to `known_id`s) 
  - nested saved entities (e.g. cohorts within cohorts)
+ - unsaved custom properties
  - copying data views + settings
  - user invites
  - session/group keys/timezone and other global project settings

@@ -25,6 +25,7 @@ const deep = require('deep-object-diff');
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
+global.runId = runId;
 
 async function main(
 	source = {
@@ -33,7 +34,8 @@ async function main(
 		project: 1234,
 		start: dayjs().format(dateFormat),
 		end: dayjs().format(dateFormat),
-		region: `US`
+		region: `US`,
+		dash_id: []
 	},
 	target = {
 		acct: "",
@@ -86,6 +88,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	//options
 	let generateSummary, copyEvents, copyProfiles, copyEntities;
 	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts;
+	const { dash_id } = source;
 
 	//PROMPT USER FOR OPTIONS (if not specified)
 	if (isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
@@ -99,7 +102,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	}
 
 	time('migrate', 'start');
-	track('start', {runId, ...opts});
+	track('start', { runId, ...opts });
 
 	/*
 	-------
@@ -199,6 +202,31 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			log(`	... found 0 empty dashboards`);
 		}
 
+		if (source.dash_id.length > 0) {
+			log(`filtering for SPECIFIC dashboards: ${source.dash_id.join(", ")}`, null, true);
+			sourceDashes = sourceDashes.filter((dash) => {
+				return source.dash_id.some((specifiedId) => {
+					return specifiedId === dash.id;
+				});
+			});
+			//find custom entities which the dashboard depends on
+			const dependentReports = sourceDashes.map(dash => dash.REPORTS).map(dash => Object.values(dash)).flat().map(report => report.params).map(JSON.stringify);
+			const dependentCohorts = sourceCohorts.map(cohort => cohort.id).filter(cohortId => dependentReports.some(reportString => reportString.includes(cohortId)));
+			const dependentCustEvents = sourceCustEvents.map(custEvent => custEvent.id).filter(custEventId => dependentReports.some(reportString => reportString.includes(custEventId)));
+			const depedentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
+			log(`\t... found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${depedentCustProps.length} custom prop(s) which the dashboard(s) depend on`);
+			sourceCohorts = sourceCohorts.filter((cohort) => {
+				return dependentCohorts.some(cohortId => cohortId === cohort.id);
+			});
+			sourceCustEvents = sourceCustEvents.filter((custEvent) => {
+				return dependentCustEvents.some(custEvId => custEvId === custEvent.id);
+			});
+			sourceCustProps = sourceCustProps.filter((custProp) => {
+				return depedentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
+			});
+
+		}
+
 
 	}
 
@@ -222,16 +250,18 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	if (copyProfiles) {
 		intentString += `${u.comma(numProfiles)} user profiles\n`;
 	}
-
+	//todo don't copy schema for dash_id
 	if (copyEntities) {
-		intentString += `${u.comma(sourceSchema.length)} events & props schema
-${u.comma(sourceCustEvents.length)} custom events
-${u.comma(sourceCustProps.length)} custom props
-${u.comma(sourceCohorts.length)} cohorts
-${u.comma(sourceDashes.length)} dashboards
-${u.comma(sourceFoundReports)} reports
-${u.comma(sourceFoundMedia)} media objects
-${u.comma(sourceFoundText)} text cards`;
+		if (dash_id.length === 0) {
+			intentString += `${u.comma(sourceSchema.length)} events & props schema\n`;
+		}
+		intentString += `${u.comma(sourceCustEvents.length)} custom event(s)
+${u.comma(sourceCustProps.length)} custom prop(s)
+${u.comma(sourceCohorts.length)} cohort(s)
+${u.comma(sourceDashes.length)} dashboard(s)
+${u.comma(sourceFoundReports)} report(s)
+${u.comma(sourceFoundMedia)} media object(s)
+${u.comma(sourceFoundText)} text card(s)`;
 	}
 
 
@@ -281,7 +311,7 @@ from project: ${source.project} to project: ${target.project}
 			log(`sent ${u.comma(targetImportEvents.results.totalRecordCount)} events in ${u.comma(targetImportEvents.results.totalReqs)} requests; writing logfile...`);
 			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents.responses, null, 2));
 		} catch (e) {
-			track('error', {type: "events", runId, ...opts});
+			track('error', { type: "events", runId, ...opts });
 			debugger;
 		}
 
@@ -296,57 +326,59 @@ from project: ${source.project} to project: ${target.project}
 			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing logfile...`);
 			await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2));
 		} catch (e) {
-			track('error', {type: "profiles", runId, ...opts});
+			track('error', { type: "profiles", runId, ...opts });
 			debugger;
 		}
 
 	}
 
 	if (copyEntities) {
-		try {
-			log(`uploading existing lexicon schema to new project...`, null, true);
-			targetSchema = await u.postSchema(target, sourceSchema);
-			log(`	... 👍 done`);
+		if (dash_id.length === 0) {
+			try {
+				log(`uploading existing lexicon schema to new project...`, null, true);
+				targetSchema = await u.postSchema(target, sourceSchema);
+				log(`	... 👍 done`);
+			}
+
+			catch (e) {
+				log(`	... ⛔️ failed to upload schema`);
+				track('error', { type: "schema", runId, ...opts });
+				debugger;
+			}
 		}
 
-		catch (e) {
-			log(`	... ⛔️ failed to upload schema`);
-			track('error', {type: "schema", runId, ...opts});
-			debugger;
-		}
-
 		try {
-			log(`creating ${sourceCustEvents.length} custom events + ${sourceCustProps.length} custom props...`, null, true);
+			log(`creating ${sourceCustEvents.length} custom event(s) + ${sourceCustProps.length} custom prop(s)...`, null, true);
 			if (sourceCustProps.length > 0) targetCustProps = await u.makeCustomProps(target, sourceCustProps);
 			if (sourceCustEvents.length > 0) targetCustEvents = await u.makeCustomEvents(target, sourceCustEvents, sourceCustProps, targetCustProps);
 			log(`	... 👍 done`);
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create custom events + props`);
-			track('error', {type: "custom events", runId, ...opts});
+			track('error', { type: "custom events", runId, ...opts });
 			debugger;
-			
+
 		}
 
 		try {
-			log(`creating ${sourceCohorts.length} cohorts...`, null, true);
+			log(`creating ${sourceCohorts.length} cohort(s)...`, null, true);
 			targetCohorts = await u.makeCohorts(source, target, sourceCohorts, sourceCustEvents, sourceCustProps, targetCustEvents, targetCustProps);
 			log(`	... 👍 created ${u.comma(targetCohorts.length)} cohorts`);
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create cohorts`);
-			track('error', {type: "cohorts", runId, ...opts});
+			track('error', { type: "cohorts", runId, ...opts });
 			debugger;
 		}
 
 		try {
-			log(`creating ${sourceDashes.length} dashboards with...\n\t${sourceFoundReports} reports\n\t${sourceFoundMedia} media object\n\t${sourceFoundText} text cards`, null, true);
+			log(`creating ${sourceDashes.length} dashboard(s) with...\n\t${sourceFoundReports} reports\n\t${sourceFoundMedia} media object\n\t${sourceFoundText} text cards`, null, true);
 			targetDashes = await u.makeDashes(source, target, sourceDashes, sourceCustEvents, sourceCustProps, sourceCohorts, targetCustEvents, targetCustProps, targetCohorts);
 			log(`\t... 👍 created ${u.comma(targetDashes.dashes.length)} dashboards\n\t... 👍 created ${targetDashes.reports.length} reports\n\t... 👍 created ${targetDashes.media.length} media objects\n\t... 👍 created ${targetDashes.text.length} text cards`);
 		}
 		catch (e) {
 			log(`	... ⛔️ failed to create dashboards`);
-			track('error', {type: "dashboards", runId, ...opts});
+			track('error', { type: "dashboards", runId, ...opts });
 			debugger;
 		}
 
@@ -378,7 +410,7 @@ from project: ${source.project} to project: ${target.project}
 
 	log(`all finished... thank you for playing the game`);
 	time(`migrate`, `stop`);
-	track('end', {runId, ...opts});
+	track('end', { runId, ...opts });
 	//write logs
 	await u.writeFile(`${dataFolder}/log.txt`, logs);
 	await u.writeFile(`${dataFolder}/rawLog.json`, JSON.stringify(everyThingTheScriptDid, null, 2));
