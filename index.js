@@ -160,7 +160,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 		log(`querying dashboards metadata...`, null, true);
 		sourceDashes = await u.getAllDash(source);
 		log(`	... 👍 found ${u.comma(sourceDashes.length)} dashboards`);
-		if (source.dash_id.length > 0) {
+		if (source?.dash_id?.length || 0 > 0) {
 			sourceDashes = sourceDashes.filter((dash) => {
 				return source.dash_id.some((specifiedId) => {
 					return specifiedId === dash.id;

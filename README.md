@@ -47,7 +47,7 @@ SOURCE_PROJECT = ''
 SOURCE_DATE_START = '' 
 SOURCE_DATE_END = ''
 SOURCE_REGION = '' 	
-SOURCE_DASH_ID = '' 
+SOURCE_DASH_ID = ''
 
 TARGET_ACCT = '' 	
 TARGET_PASS = '' 	
@@ -64,9 +64,9 @@ see [CLI Usage](#CLI)  for an annotated example
 |`SOURCE_PASS`  | --- | the service account secret of your SOURCE project |
 |`SOURCE_PROJECT`  | --- | the SOURCE's `project_id` |
 |`SOURCE_DATE_START`  | TODAY | optional: if copying events - when to start `MM-DD-YYYY` |
-|`SOURCE_DATE_END`  | TODAY | if copying events - when to end `MM-DD-YYYY` |
+|`SOURCE_DATE_END`  | TODAY | optional: if copying events - when to end `MM-DD-YYYY` |
 |`SOURCE_REGION`  | `'US'` |  `US` or `EU` |
-|`SOURCE_DASH_ID`  | --- | a `dashboard_id` (or comma sep list of `dashboard_id`s) for coping a subset of dashboards |
+|`SOURCE_DASH_ID`  | --- | optional: a `dashboard_id` (or comma sep list of `dashboard_id`s) for coping a subset of dashboards |
 |`TARGET_ACCT`  | --- | the service account of your TARGET project |
 |`TARGET_PASS`  | --- | the service account secret of your TARGET project |
 |`TARGET_PROJECT`  | --- | the TARGET project id |

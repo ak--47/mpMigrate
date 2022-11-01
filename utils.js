@@ -90,7 +90,10 @@ exports.getEnvCreds = function () {
 			process.exit(1);
 		}
 
+	}
 
+	else {
+		envCredsSource.dash_id = []
 	}
 
 	return {
