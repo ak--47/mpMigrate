@@ -9,7 +9,6 @@
 /*
 -------
 TODOS:
-	allow specifiying of dash, cohort, custom prop/event ids in source
 	dashboard filters with custom props
 	custom events with custom props
 -------
@@ -25,21 +24,25 @@ const deep = require('deep-object-diff');
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
+const yargs = require('yargs');
 global.runId = runId;
+
 
 async function main(
 	source = {
 		acct: "",
 		pass: "",
+		bearer: "",
 		project: 1234,
 		start: dayjs().format(dateFormat),
 		end: dayjs().format(dateFormat),
 		region: `US`,
-		dash_id: []
+		dash_id: []		
 	},
 	target = {
 		acct: "",
 		pass: "",
+		bearer: "",
 		project: 1234,
 		region: `US`
 	},
@@ -93,6 +96,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	//PROMPT USER FOR OPTIONS (if not specified)
 	if (isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
 		log(`first... i need to ask you a few questions...`);
+		// @ts-ignore
 		({ generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target));
 	} else {
 		generateSummary = shouldGenerateSummary;
@@ -220,8 +224,8 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			const dependentReports = sourceDashes.map(dash => dash.REPORTS).map(dash => Object.values(dash)).flat().map(report => report.params).map(JSON.stringify);
 			const dependentCohorts = sourceCohorts.map(cohort => cohort.id).filter(cohortId => dependentReports.some(reportString => reportString.includes(cohortId)));
 			const dependentCustEvents = sourceCustEvents.map(custEvent => custEvent.id).filter(custEventId => dependentReports.some(reportString => reportString.includes(custEventId)));
-			const depedentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
-			log(`\t... 👍 found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${depedentCustProps.length} custom prop(s)\n\twhich the dashboard(s) depend on`);
+			const dependentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
+			log(`\t... 👍 found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${dependentCustProps.length} custom prop(s)\n\twhich the dashboard(s) depend on`);
 			sourceCohorts = sourceCohorts.filter((cohort) => {
 				return dependentCohorts.some(cohortId => cohortId === cohort.id);
 			});
@@ -229,7 +233,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 				return dependentCustEvents.some(custEvId => custEvId === custEvent.id);
 			});
 			sourceCustProps = sourceCustProps.filter((custProp) => {
-				return depedentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
+				return dependentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
 			});
 
 		}
@@ -315,8 +319,8 @@ from project: ${source.project} to project: ${target.project}
 		try {
 			sourceExportEvents = await u.exportAllEvents(source);
 			targetImportEvents = await u.sendEvents(source, target, transformEventsFunc);
-			log(`sent ${u.comma(targetImportEvents.results.totalRecordCount)} events in ${u.comma(targetImportEvents.results.totalReqs)} requests; writing logfile...`);
-			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents.responses, null, 2));
+			log(`sent ${u.comma(targetImportEvents.success)} events in ${u.comma(targetImportEvents.batches)} requests; writing log file...`);
+			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents, null, 2));
 		} catch (e) {
 			track('error', { type: "events", runId, ...opts });
 			debugger;
@@ -330,7 +334,7 @@ from project: ${source.project} to project: ${target.project}
 		try {
 			sourceExportProfiles = await u.exportAllProfiles(source, target);
 			targetImportProfiles = await u.sendProfiles(source, target, transformProfilesFunc);
-			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing logfile...`);
+			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing log file...`);
 			await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2));
 		} catch (e) {
 			track('error', { type: "profiles", runId, ...opts });
@@ -433,6 +437,7 @@ UTILS
 */
 
 function log(message, data, hasResponse = false) {
+	// @ts-ignore
 	if (SILENT) {
 		return;
 	}
