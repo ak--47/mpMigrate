@@ -108,6 +108,7 @@ for project: ${target.project}
     if (targetCohorts.length > 0) {
         log(`deleting ${targetCohorts.length} cohorts...`, null, true)
         let cohortIds = targetCohorts.map(cohort => cohort.id);
+        // @ts-ignore
         deletedCohorts = await fetch(URLs.deleteCohorts(project, region), {
             method: `post`,
             auth: { username, password },
@@ -135,6 +136,7 @@ for project: ${target.project}
 
     const everyThingTheScriptDid = {
         target,
+        // @ts-ignore
         deletedSchema: deletedSchema.data.results,
         deletedCohorts,
         deletedDashboards

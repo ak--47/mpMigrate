@@ -9,22 +9,48 @@
 /*
 -------
 TODOS:
+	bearer auth
+	https://github.com/nanovazquez/yargs-interactive
 	dashboard filters with custom props
 	custom events with custom props
 -------
 */
 
+
+/*
+----
+MODULES
+----
+*/
 require('dotenv').config();
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');
-let logs = ``;
+const cli = require('./cli.js');
+const path = require('path');
+
+/*
+----
+TOOLS
+----
+*/
+
+
 const dayjs = require('dayjs');
 const dateFormat = `YYYY-MM-DD`;
 const deep = require('deep-object-diff');
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
-const yargs = require('yargs');
+
+
+
+/*
+----
+GLOBALS
+----
+*/
+
+let logs = ``;
 global.runId = runId;
 
 
@@ -37,7 +63,7 @@ async function main(
 		start: dayjs().format(dateFormat),
 		end: dayjs().format(dateFormat),
 		region: `US`,
-		dash_id: []		
+		dash_id: []
 	},
 	target = {
 		acct: "",
@@ -91,7 +117,8 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	//options
 	let generateSummary, copyEvents, copyProfiles, copyEntities;
 	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts;
-	const { dash_id } = source;
+	let { dash_id } = source;
+	if (!dash_id) dash_id = [];
 
 	//PROMPT USER FOR OPTIONS (if not specified)
 	if (isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
@@ -213,7 +240,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			log(`	... found 0 empty dashboards`);
 		}
 
-		if (source.dash_id.length > 0) {
+		if (source.dash_id?.length > 0) {
 			log(`filtering for SPECIFIC dashboards: ${source.dash_id.join(", ")}`, null, true);
 			sourceDashes = sourceDashes.filter((dash) => {
 				return source.dash_id.some((specifiedId) => {
@@ -323,7 +350,7 @@ from project: ${source.project} to project: ${target.project}
 			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents, null, 2));
 		} catch (e) {
 			track('error', { type: "events", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
@@ -338,7 +365,7 @@ from project: ${source.project} to project: ${target.project}
 			await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2));
 		} catch (e) {
 			track('error', { type: "profiles", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
@@ -354,7 +381,7 @@ from project: ${source.project} to project: ${target.project}
 			catch (e) {
 				log(`	... ⛔️ failed to upload schema`);
 				track('error', { type: "schema", runId, ...opts });
-				debugger;
+				//debugger;
 			}
 		}
 
@@ -367,7 +394,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create custom events + props`);
 			track('error', { type: "custom events", runId, ...opts });
-			debugger;
+			//debugger;
 
 		}
 
@@ -379,7 +406,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create cohorts`);
 			track('error', { type: "cohorts", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 		try {
@@ -390,7 +417,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create dashboards`);
 			track('error', { type: "dashboards", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
@@ -416,7 +443,8 @@ from project: ${source.project} to project: ${target.project}
 		sourceExportEvents,
 		sourceExportProfiles,
 		targetImportEvents,
-		targetImportProfiles
+		targetImportProfiles,
+		logs: path.resolve(dataFolder)
 	};
 
 	log(`all finished... thank you for playing the game`);

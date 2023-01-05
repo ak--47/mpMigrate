@@ -52,10 +52,10 @@ AUTH + STORAGE
 
 exports.getEnvCreds = function () {
 	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`, `SOURCE_DASH_ID`);
-	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region", SOURCE_DASH_ID: "dash_id" };
-	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" };
+	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`, `SOURCE_DASH_ID`, `SOURCE_BEARER`);
+	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`, `TARGET_BEARER`);
+	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region", SOURCE_DASH_ID: "dash_id", SOURCE_BEARER: "bearer" };
+	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region", TARGET_BEARER: "bearer" };
 	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
 	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
 
@@ -1155,6 +1155,7 @@ exports.sendEvents = async function (source, target, transform) {
 		bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
 		strict: true, //use strict mode?
 		logs: true, //print to stdout?
+		verbose: false,
 		transformFunc: transform
 	};
 	const importedData = await mpImport(creds, data, options);
