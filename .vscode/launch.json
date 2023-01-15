@@ -6,7 +6,7 @@
             "name": "CLI",
 			"runtimeExecutable": "${workspaceFolder}/node_modules/nodemon/bin/nodemon.js",
             "console": "integratedTerminal", // <= the relevant part
-            "program": "${workspaceFolder}/scratch.js",
+            "program": "${workspaceFolder}/index.js",
 			"runtimeArgs": ["--inspect", "-I"],
 			"env": {
 				"MODE": "cli"

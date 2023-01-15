@@ -14,9 +14,12 @@ const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
 const u = require('ak-tools');
 const track = u.tracker('mp-migrate');
+const inquirer = require('inquirer');
+const { spawn } = require('child_process')
 
 // retries on 503: https://stackoverflow.com/a/64076585
 // TODO on 500, just change the report name
+// @ts-ignore
 axiosRetry(fetch, {
 	retries: 3, // number of retries
 	retryDelay: (retryCount) => {
@@ -29,15 +32,16 @@ axiosRetry(fetch, {
 	},
 	onRetry: function (retryCount, error, requestConfig) {
 		if (error.response.status === 409) {
-		const oldEntity = JSON.parse(requestConfig.data);
-		oldEntity.name += `copy`;
-		const newEntity = JSON.stringify(oldEntity);
-		requestConfig.data = newEntity;
-		return requestConfig;
+			const oldEntity = JSON.parse(requestConfig.data);
+			oldEntity.name += `copy`;
+			const newEntity = JSON.stringify(oldEntity);
+			requestConfig.data = newEntity;
+			return requestConfig;
 		}
 		else {
-			track('error', {runId, ...requestConfig.data})
-			console.log('something is broken; please let AK know...')
+			// @ts-ignore
+			track('error', { runId, ...requestConfig.data });
+			console.log('something is broken; please let AK know...');
 		}
 	}
 }
@@ -50,9 +54,9 @@ AUTH + STORAGE
 */
 
 exports.validateServiceAccount = async function (creds) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 	let res = (await fetch(URLs.me(region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -66,7 +70,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: access`;
 	} else {
 		`fail: access`;
-		console.error(`user: ${username} does not have access to project: ${project}\ndouble check your credentials and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} does not have access to project: ${project}\ndouble check your credentials and try again`);
 		process.exit(1);
 
 	}
@@ -77,7 +81,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: permissions`;
 	} else {
 		`fail: permissions`;
-		console.error(`user: ${username} has ${perms} to project ${project}\nthis script requires accounts to have 'admin' or 'ower' permissions\nupdate your permissions and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} has ${perms} to project ${project}\nthis script requires accounts to have 'admin' or 'owner' permissions\nupdate your permissions and try again`);
 		process.exit(1);
 
 	}
@@ -94,7 +98,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: global access`;
 	} else {
 		`fail: global access`;
-		console.error(`user: ${username} does not have access to a global data view in ${project}\nthis script requires accounts to have access to a global data view\nupdate your permissions and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} does not have access to a global data view in ${project}\nthis script requires accounts to have access to a global data view\nupdate your permissions and try again`);
 		process.exit(1);
 	}
 
@@ -104,7 +108,7 @@ exports.validateServiceAccount = async function (creds) {
 
 	// get project metadata
 	let metaData = (await fetch(URLs.getMetaData(project, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -171,136 +175,26 @@ USER PROMPTS
 ------------
 */
 
-exports.userPrompt = async function (source, target, shouldContinue) {
-	//user input
-	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
-	const defaults = {
-		pattern: yesNoRegex,
-		type: 'string',
-		required: true,
-		message: 'please say "yes" or "no", or "y", or "n"',
-		default: 'no',
-		before: function (value) { return value?.toLowerCase(); }
-	};
+exports.continuePrompt = async function () {
+	const ask = inquirer.createPromptModule();
+	const should = await ask([{
+		type: "confirm",
+		message: `are you SURE you want to continue?`,
+		name: "continue",
+		default: true
+	}]);
 
-	if (shouldContinue) {
-		const continueSchema = {
-			properties: {
-				shouldContinue: {
-					description: `are you sure you want to continue?`,
-					...defaults
-				}
-			}
-		};
-
-		continueSchema.properties.shouldContinue.default = 'yes';
-
-		prompt.start();
-		prompt.message = ``;
-		let { shouldContinue } = await prompt.get(continueSchema);
-
-		if (shouldContinue.includes('y')) {
-			return true;
-		} else {
-			return false;
-		}
-
-
+	if (!should.continue) {
+		log(`aborting...`);
+		process.exit(0);
 	}
 
-	const promptSchema = {
-		properties: {
-			generateSummary: {
-				description: `do you want to generate a TEXT SUMMARY of project ${source.project}'s saved entities?`,
-				...defaults
-			},
-			copyEvents: {
-				description: `do you want to COPY EVENTS from project ${source.project} to project ${target.project}?`,
-				...defaults
-			},
-			copyProfiles: {
-				description: `do you want to COPY PROFILES from project ${source.project} to project ${target.project}?`,
-				...defaults
-			},
-			copyEntities: {
-				description: `do you want to COPY SAVED ENTITIES from project ${source.project} to project ${target.project}?${source.dash_id.length > 0 ? `\n\tNOTE: you have specified ${source.dash_id.length} dashboard(s) to copy...` : ""}`,
-				...defaults
-			}
-		}
-	};
-	prompt.start();
-	prompt.message = ``;
-	let { generateSummary, copyEvents, copyProfiles, copyEntities } = await prompt.get(promptSchema);
-
-	if (generateSummary.includes('y')) {
-		generateSummary = true;
-	} else {
-		generateSummary = false;
+	else {
+		log(`continuing...`)
+		return true
 	}
-
-	if (copyEvents.includes('y')) {
-		copyEvents = true;
-	} else {
-		copyEvents = false;
-	}
-
-	if (copyProfiles.includes('y')) {
-		copyProfiles = true;
-	} else {
-		copyProfiles = false;
-	}
-
-	if (copyEntities.includes('y')) {
-		copyEntities = true;
-	} else {
-		copyEntities = false;
-	}
-
-	console.log(``);
-
-	return {
-		generateSummary,
-		copyEvents,
-		copyProfiles,
-		copyEntities
-	};
 };
 
-async function failPrompt() {
-	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
-	const defaults = {
-		pattern: yesNoRegex,
-		type: 'string',
-		required: true,
-		message: 'please say "yes" or "no", or "y", or "n"',
-		default: 'no',
-		before: function (value) { return value?.toLowerCase(); }
-	};
-
-
-	const continueSchema = {
-		properties: {
-			shouldContinue: {
-				description: `do you want to continue?`,
-				...defaults
-			}
-		}
-	};
-
-	continueSchema.properties.shouldContinue.default = 'yes';
-
-	prompt.start();
-	prompt.message = ``;
-	let { shouldContinue } = await prompt.get(continueSchema);
-
-	if (shouldContinue.includes('y')) {
-		console.log('...continuing\n');
-		return true;
-	} else {
-		log('...quitting\n');
-		return false;
-	}
-}
 
 /*
 -------
@@ -309,21 +203,15 @@ GETTERS
 */
 
 exports.getCohorts = async function (creds) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getCohorts(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING COHORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
 	})).data;
 
@@ -331,42 +219,30 @@ exports.getCohorts = async function (creds) {
 };
 
 exports.getAllDash = async function (creds) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getAllDash(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		console.error(`ERROR GETTING DASH`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 	})).data;
 
 	return res.results;
 };
 
 exports.getDashReports = async function (creds, dashId) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getSingleDash(workspace, dashId, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		console.error(`ERROR GETTING REPORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: { contents: { report: [] } } } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 	})).data?.results;
 
 	const dashSummary = {
@@ -382,21 +258,15 @@ exports.getDashReports = async function (creds, dashId) {
 };
 
 exports.getSchema = async function (creds) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 	let res = (await fetch(URLs.getSchemas(project, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
 	})).data;
 
@@ -405,9 +275,9 @@ exports.getSchema = async function (creds) {
 };
 
 exports.getCustomEvents = async function (creds) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomEvents(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -420,21 +290,15 @@ exports.getCustomEvents = async function (creds) {
 };
 
 exports.getCustomProps = async function (creds) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomProps(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING CUSTOM PROPS!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
 	})).data.results;
 
@@ -449,7 +313,7 @@ SETTERS
 */
 
 exports.postSchema = async function (creds, schema) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 
 	schema = schema.filter(e => !e.entityType.includes('custom'));
 
@@ -466,20 +330,14 @@ exports.postSchema = async function (creds, schema) {
 	let params = { entries: schema, ...extraParams };
 	let res = await fetch(URLs.postSchema(project, region), {
 		method: `post`,
-		auth: { username, password },
+		headers: { Authorization: auth },
 		data: params
 
 	}).catch(async (e) => {
 		params;
 		console.error(`ERROR POSTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 	});
 
 	return res.data.results;
@@ -488,7 +346,7 @@ exports.postSchema = async function (creds, schema) {
 
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
 	//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
-	let { acct: username, pass: password, workspace, project, region } = targetCreds;
+	let { auth, workspace, project, region } = targetCreds;
 	let results = [];
 
 	// //match old and new custom entities
@@ -503,7 +361,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 
 		let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: cohort
 
 		}).catch((e) => {
@@ -522,7 +380,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 		} else {
 			await fetch(URLs.shareCohort(project, createdCohort.data.results.id), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
 				data: { "id": createdCohort.data.results.id, "projectShares": [{ "id": project, "canEdit": true }] }
 			}).catch((e) => {
 				debugger;
@@ -534,7 +392,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 };
 
 exports.makeCustomProps = async function (creds, custProps) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let results = [];
 	let customProperties = clone(custProps);
 	loopCustomProps: for (const custProp of customProperties) {
@@ -555,7 +413,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 		//make the dashboard; get back id
 		let createdCustProp = await fetch(URLs.createCustomProp(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: custProp
 
 		}).catch((e) => {
@@ -576,7 +434,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 			// share custom event
 			await fetch(URLs.shareCustProp(project, customProp.customPropertyId, region), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
 				data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
 			}).catch((e) => {
 				debugger;
@@ -589,7 +447,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 
 //TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
 exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let results = [];
 
 	// //match old and new custom entities
@@ -604,11 +462,11 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 		let custPayload = new FormData();
 		custPayload.append('name', name);
 		custPayload.append('alternatives', JSON.stringify(alternatives));
+		custPayload.append('Authorization', auth);
 		let headers = custPayload.getHeaders();
 
 		let createdCustEvent = await fetch(URLs.createCustomEvent(workspace, region), {
 			method: 'post',
-			auth: { username, password },
 			headers,
 			data: custPayload,
 		}).catch((e) => {
@@ -630,7 +488,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			// share custom event
 			await fetch(URLs.shareCustEvent(project, customEvent?.id, region), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
 				data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
 			}).catch((e) => {
 				debugger;
@@ -643,7 +501,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 
 //TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
-	const { acct: username, pass: password, project, workspace, region } = targetCreds;
+	const { auth, project, workspace, region } = targetCreds;
 	let dashCount = -1;
 	const OGDashes = clone(dashes);
 	const results = {
@@ -665,8 +523,8 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		.filter(x => Boolean(x[0]) && Boolean(x[1]));
 	let newDashes;
 	for (const pairIds of matches) {
-		const substitue = changeFactory(pairIds[0], pairIds[1]);
-		newDashes = substitue(dashes);
+		const substitute = changeFactory(pairIds[0], pairIds[1]);
+		newDashes = substitute(dashes);
 	}
 
 	if (!newDashes) newDashes = dashes;
@@ -674,7 +532,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	loopDash: for (const dash of newDashes) {
 		let failed = false;
 		dashCount++;
-		//copy all child reports metadatas
+		//copy all child reports metadata
 		const reports = [];
 		const media = [];
 		const text = [];
@@ -693,7 +551,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			text.push(dash.TEXT[textId]);
 		}
 
-		//get rid of disallowed keys (this is backwards; u shuld whitelist)
+		//get rid of disallowed keys (this is backwards; u should whitelist)
 		blacklistKeys.forEach(key => delete dash[key]);
 
 		//get rid of null keys
@@ -714,7 +572,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		//make the dashboard; get back id
 		let createdDash = await fetch(URLs.makeDash(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: dash
 
 		}).catch((e) => {
@@ -755,7 +613,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
 		let sharedDash = await fetch(URLs.shareDash(project, dashId, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: sharePayload
 		}).catch((e) => {
 			sharePayload;
@@ -769,7 +627,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		//pin dashboards
 		let pinnedDash = await fetch(URLs.pinDash(workspace, dashId, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: {}
 		}).catch((e) => {
 			debugger;
@@ -779,13 +637,13 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 
 		// UPDATE LAYOUT
 		const allCreatedEntities = [...reportResults, ...mediaResults, ...textResults].flat();
-		const currentDashId = results.dashes.slice().pop().id;
+		const currentDashId = results.dashes.slice().pop()?.id;
 		const mostRecentNewDashLayout = (await exports.getDashReports(targetCreds, currentDashId)).layout;
 		//const mostRecentNewDashLayout = Object.values(results).flat().flat().pop().results.layout;
 		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
 		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: JSON.stringify(matchedDashLayout)
 		}).catch((e) => {
 			matchedDashLayout;
@@ -1138,7 +996,7 @@ REPORT MAKERS
 -------------
 */
 const makeMedia = async function (creds, media = [], oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGMedia = clone(media);
 	let mediaCount = -1;
@@ -1149,7 +1007,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 		const mediaCreate = { "content": { "action": "create", "content_type": "media", "content_params": { "media_type": "", "service": "", "path": "" } } };
 		const createMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: mediaCreate
 
 		}).catch((e) => {
@@ -1188,7 +1046,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 
 		let updatedMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
@@ -1230,7 +1088,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 };
 
 const makeText = async function (creds, text = [], oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGText = clone(text);
 	let textCount = -1;
@@ -1241,7 +1099,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 		const textCreate = { "content": { "action": "create", "content_type": "text", "content_params": { "markdown": "" } } };
 		const createTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: textCreate
 
 		}).catch((e) => {
@@ -1279,12 +1137,12 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 
 		let updatedTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
 			failed = true;
-			media;
+			text;
 			results;
 			console.error(`ERROR UPDATING MEDIA CARD!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
@@ -1320,7 +1178,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 };
 
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGReport = clone(reports);
 	let reportCount = -1;
@@ -1355,7 +1213,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 		let createdReport = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
@@ -1587,7 +1445,7 @@ exports.writeFile = async function (filename, data) {
 	await fs.writeFile(filename, data);
 };
 
-const openExplorerinMac = function (path, callback) {
+const openExplorerInMac = function (path, callback) {
 	path = path || '/';
 	let p = spawn('open', [path]);
 	p.on('error', (err) => {
@@ -1633,7 +1491,7 @@ exports.saveLocalSummary = async function (projectMetaData) {
 
 	//reveal the folder
 	try {
-		openExplorerinMac(path.resolve(`${source.localPath}`));
+		openExplorerInMac(path.resolve(`${source.localPath}`));
 	}
 
 	catch (e) {

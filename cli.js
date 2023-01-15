@@ -10,8 +10,11 @@ const inquirer = require('inquirer');
 
 
 exports.cli = async function () {
+	/** @type {types.Source} */
 	let source = {};
+	/** @type {types.Target} */
 	let target = {};
+	/** @type {types.Options} */
 	let options = {};
 
 	const ask = inquirer.createPromptModule();
@@ -257,9 +260,9 @@ function firstQuestions() {
 			type: "list",
 			message: "what are you trying to do?",
 			name: "intent",
-			choices: [
-				{ name: "copy between projects", value: "copy" },
+			choices: [				
 				{ name: "enumerate saved reports", value: "report" },
+				{ name: "copy between projects", value: "copy" },
 				{ name: "something else...", value: false }
 			]
 		}];

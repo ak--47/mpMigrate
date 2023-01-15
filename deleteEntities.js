@@ -4,15 +4,20 @@ const u = require('./utils.js')
 const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
 const cli = require('./cli')
+const types = require('./types.js');
 
-
+/**
+ * 
+ * @param {types.Target} target 
+ * @returns 
+ */
 async function main(target = {
     acct: "",
     pass: "",
     project: 1234,
 	region: `US`
 }) {
-	require('dotenv').config();
+	require('dotenv').config({override: true});
     log(`👾 DELETE ALL ENTITIES 👾`)
 
 	const { envCredsTarget } = cli.getEnvCreds()
@@ -22,7 +27,7 @@ async function main(target = {
         target = envCredsTarget
         log(`using .env for target credentials`)
     }
-
+	buildAuth(target)
     //SOURCE
     //validate service account & get workspace id
     log(`validating source service account...`, null, true)
@@ -66,13 +71,13 @@ for project: ${target.project}
 
 `)
 
-    let { acct: username, pass: password, project, workspace, region } = target
+    let { auth, project, workspace, region } = target
 
     //delete schema
     log(`deleting schema...`, null, true)
     let deletedSchema = await fetch(URLs.postSchema(project, region), {
         method: `delete`,
-        auth: { username, password }
+        headers: { Authorization: auth}
     }).catch((e) => {
         debugger;
     })
@@ -82,7 +87,7 @@ for project: ${target.project}
     for (const custEvent of customEvents) {
         await fetch(URLs.delCustEvent(workspace, region), {
             method: `delete`,
-            auth: { username, password },
+            headers: { Authorization: auth},
             data: { "events": [{ "collectEverythingEventId": null, "customEventId": custEvent.id, "id": 0 }] }
         }).catch((e) => {
             custEvent
@@ -93,7 +98,7 @@ for project: ${target.project}
     for (const custProp of customProps) {
         await fetch(URLs.delCustProp(project, custProp.customPropertyId, region), {
             method: `delete`,
-            auth: { username, password },
+			headers: { Authorization: auth},
         }).catch((e) => {
             custProp
             debugger;
@@ -111,7 +116,7 @@ for project: ${target.project}
         // @ts-ignore
         deletedCohorts = await fetch(URLs.deleteCohorts(project, region), {
             method: `post`,
-            auth: { username, password },
+			headers: { Authorization: auth},
             data: { cohort_ids: cohortIds }
         }).catch((e) => {
             debugger;
@@ -126,7 +131,7 @@ for project: ${target.project}
     for (const dash of targetDashes) {
         let deletedDashboard = await fetch(URLs.getSingleDash(workspace, dash.id, region), {
             method: `delete`,
-            auth: { username, password }
+			headers: { Authorization: auth}
         })
         deletedDashboards.push(deletedDashboard.data.results)
     }
@@ -160,5 +165,26 @@ function log(message, data, hasResponse = false) {
         console.log('\n')
     }
 }
+
+/**
+ * 
+ * @param {types.Source | types.Target} p 
+ */
+function buildAuth(p) {
+	if (p.bearer) {
+		p.auth = `Bearer ${p.bearer}`;
+		return;
+	}
+
+	if (p.acct && p.pass) {
+		p.auth = `Basic ${Buffer.from(p.acct + ":" + p.pass).toString('base64')}`;
+		return;
+	}
+
+	console.error(`no bearer or service account for project ${p.project}`);
+	throw Error('a bearer token token or service account is required!');
+
+}
+
 
 module.exports = main;
