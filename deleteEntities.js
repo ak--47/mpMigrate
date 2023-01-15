@@ -3,7 +3,7 @@
 const u = require('./utils.js')
 const URLs = require('./endpoints.js')
 const fetch = require('axios').default;
-require('dotenv').config();
+const cli = require('./cli')
 
 
 async function main(target = {
@@ -12,10 +12,10 @@ async function main(target = {
     project: 1234,
 	region: `US`
 }) {
-
+	require('dotenv').config();
     log(`👾 DELETE ALL ENTITIES 👾`)
 
-	const { envCredsTarget } = u.getEnvCreds()
+	const { envCredsTarget } = cli.getEnvCreds()
 
     //choose creds based on .env or params
     if (target.acct === '' && target.pass === '') {

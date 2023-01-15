@@ -5,7 +5,6 @@ const FormData = require('form-data');
 const fs = require('fs').promises;
 const { createWriteStream } = require('fs');
 const makeDir = require('fs').mkdirSync;
-const { pick } = require('underscore');
 const dayjs = require('dayjs');
 const path = require('path');
 const dateFormat = `YYYY-MM-DD`;
@@ -49,59 +48,6 @@ axiosRetry(fetch, {
 AUTH + STORAGE
 --------------
 */
-
-exports.getEnvCreds = function () {
-	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`, `SOURCE_DASH_ID`, `SOURCE_BEARER`);
-	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`, `TARGET_BEARER`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region", SOURCE_DASH_ID: "dash_id", SOURCE_BEARER: "bearer" };
-	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region", TARGET_BEARER: "bearer" };
-	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
-	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
-
-	if (dayjs(envCredsSource.start).isValid()) {
-		envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat);
-	}
-
-	else {
-		envCredsSource.start = dayjs().format(dateFormat);
-	}
-
-	if (dayjs(envCredsSource.end).isValid()) {
-		envCredsSource.end = dayjs(envCredsSource.end).format(dateFormat);
-	}
-
-	else {
-		envCredsSource.end = dayjs().format(dateFormat);
-	}
-
-	// region defaults
-	if (!envCredsSource.region) envCredsSource.region = `US`;
-	if (!envCredsTarget.region) envCredsTarget.region = `US`;
-
-	// dash_ids
-	if (envCredsSource.dash_id) {
-		envCredsSource.dash_id = envCredsSource.dash_id.split(",").map(a => Number(a.trim()));
-		let dashIdsValid = envCredsSource.dash_id.every((dashId) => u.is(Number, dashId) && !isNaN(dashId));
-		if (!dashIdsValid) {
-			console.log(`ERROR: your source_dash_id needs to be a number (or a comma separated list of numbers) got:`);
-			console.log(envCredsSource.dash_id.join('\t\n'));
-			console.log('\ndouble check your .env and try again');
-			process.exit(1);
-		}
-
-	}
-
-	else {
-		envCredsSource.dash_id = []
-	}
-
-	return {
-		envCredsSource,
-		envCredsTarget
-	};
-
-};
 
 exports.validateServiceAccount = async function (creds) {
 	let { acct: username, pass: password, project, region } = creds;
@@ -1582,16 +1528,6 @@ const changeFactory = function (sourceId = "", targetId = "") {
 	};
 };
 
-const renameKeys = function (obj, newKeys) {
-	//https://stackoverflow.com/a/45287523
-	const keyValues = Object.keys(obj).map(key => {
-		const newKey = newKeys[key] || key;
-		return {
-			[newKey]: obj[key]
-		};
-	});
-	return Object.assign({}, ...keyValues);
-};
 
 // https://stackoverflow.com/a/41951007
 const clone = function (thing, opts) {

@@ -1,6 +1,6 @@
 {
   "name": "mp-migrate",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "keywords": [
@@ -12,6 +12,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "rm -rf ./savedProjects/* && MODE=transfer nodemon --ignore ./savedProjects/ --ext js --inspect scratch.js",
+    "cli": "MODE=cli nodemon --inspect scratch.js",
     "delete": "MODE=delete node scratch.js",
     "prune": "rm -rf ./savedProjects/*",
     "upload": "npm publish",
@@ -31,6 +32,7 @@
   "author": "AK",
   "license": "ISC",
   "dependencies": {
+    "@types/underscore": "^1.11.4",
     "ak-tools": "^1.0.214",
     "axios": "^0.27.2",
     "axios-retry": "^3.3.1",
@@ -38,12 +40,12 @@
     "deep-object-diff": "^1.1.7",
     "dotenv": "^16.0.1",
     "form-data": "^4.0.0",
+    "inquirer": "^8.2.5",
     "json-form-data": "^1.7.2",
     "mixpanel-import": "^2.2.23",
     "prompt": "^1.3.0",
     "qs": "^6.11.0",
-    "underscore": "^1.13.4",
-    "yargs-interactive": "^3.0.1"
+    "underscore": "^1.13.4"
   },
   "devDependencies": {
     "eslint": "^8.25.0",

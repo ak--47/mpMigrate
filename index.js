@@ -22,11 +22,12 @@ TODOS:
 MODULES
 ----
 */
-require('dotenv').config();
+
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');
 const cli = require('./cli.js');
 const path = require('path');
+
 
 /*
 ----
@@ -79,6 +80,7 @@ async function main(
 		shouldCopyEvents: null,
 		shouldCopyProfiles: null,
 		shouldCopyEntities: null,
+		shouldCopySchema: null,
 		silent: false,
 		skipPrompt: false,
 	}) {
@@ -95,15 +97,17 @@ async function main(
 		(by AK) v1.08
 
 this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`);
-	const { envCredsSource, envCredsTarget } = u.getEnvCreds();
+	const { envCredsSource, envCredsTarget } = cli.getEnvCreds();
 
 	//choose creds based on .env or params
 	if (source.acct === '' && source.pass === '') {
+		// @ts-ignore
 		source = envCredsSource;
 		log(`attempting to use .env for source credentials`);
 	}
 
 	if (target.acct === '' && target.pass === '') {
+		// @ts-ignore
 		target = envCredsTarget;
 		log(`attempting to use .env for target credentials`);
 	}

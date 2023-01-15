@@ -8,7 +8,7 @@ require('dotenv').config();
 const { execSync } = require("child_process");
 const { projectCopy } = require('../index.js');
 const u = require('ak-tools');
-const { getEnvCreds } = require('../utils');
+const { getEnvCreds } = require('../cli.js');
 
 let options = {
 	transformEventsFunc: x => x,
@@ -22,17 +22,17 @@ let options = {
 };
 
 
-beforeAll(() => {
+beforeEach(() => {
 	console.log('deleting entities...');
 	execSync(`npm run delete`);
 	console.log('...entities deleted 👍');
 });
 
-describe('do tests work?', () => {
-	test('a = a', () => {
-		expect(true).toBe(true);
-	});
-});
+// describe('do tests work?', () => {
+// 	test('a = a', () => {
+// 		expect(true).toBe(true);
+// 	});
+// });
 
 describe('module', () => {
 	jest.setTimeout(600000)
