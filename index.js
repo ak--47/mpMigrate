@@ -6,17 +6,10 @@
 // https://github.com/ak--47/mpMigrate
 // 
 
-/*
--------
-TODOS:
-	fix custom events
--------
-*/
-
 
 /*
 ----
-MODULES
+! MODULES
 ----
 */
 
@@ -27,17 +20,15 @@ const path = require('path');
 const types = require('./types.js');
 
 
-
 /*
 ----
-TOOLS
+! TOOLS
 ----
 */
 
 
 const dayjs = require('dayjs');
-const dateFormat = `YYYY-MM-DD`;
-const deep = require('deep-object-diff');
+
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
@@ -45,24 +36,34 @@ const runId = ak.uid(32);
 
 /*
 ----
-GLOBALS
+! GLOBALS
 ----
 */
 
 let logs = ``;
+const dateFormat = `YYYY-MM-DD`;
 global.runId = runId;
+global.dateFormat = dateFormat;
+
+
 
 /**
  * mpMigrate!
  * @example
- * const migration = await mpMigrate(source, target, options)
- * @param {types.Source} source 
- * @param {types.Target} target 
- * @param {types.Options} opts 
+ * const { projectCopy } = require('mp-migrate')
+ * const migration = await projectCopy(source, target, options)
+ * @param {types.Source} source `{acct, pass, bearer, project, region, start, end, dash_id[]}`
+ * @param {types.Target} target `{acct, pass, bearer, project, region}`
+ * @param {types.Options} opts `{shouldGenerateSummary, shouldCopyEntities, shouldCopyEvents, shouldCopyProfiles, shouldCopySchema, silent, skipPrompt}`
  * @returns {Promise<types.Summary>}
  */
-async function main(
-	source = {
+async function main(source, target, opts, isCli = false) {
+	// * logs
+	global.SILENT = opts.silent || false;
+
+	// * defaults
+	// @ts-ignore
+	source = ak.objDefault(source, {
 		acct: "",
 		pass: "",
 		bearer: "",
@@ -71,15 +72,17 @@ async function main(
 		end: dayjs().format(dateFormat),
 		region: `US`,
 		dash_id: []
-	},
-	target = {
+	});
+	// @ts-ignore
+	target = ak.objDefault(target, {
 		acct: "",
 		pass: "",
 		bearer: "",
 		project: 1234,
 		region: `US`
-	},
-	opts = {
+	});
+	// @ts-ignore
+	opts = ak.objDefault(opts, {
 		transformEventsFunc: x => x,
 		transformProfilesFunc: x => x,
 		shouldGenerateSummary: true,
@@ -89,28 +92,29 @@ async function main(
 		shouldCopySchema: false,
 		silent: false,
 		skipPrompt: false,
-	},
-	isCli = false) {
-	global.SILENT = opts.silent || false;
+	});
 
-	//check .env if source values are blank
+	// * .env
 	if (!isCli && !(source.acct || source.pass) || !source.bearer) {
 		const { envCredsSource, envCredsTarget } = walkthrough.getEnvCreds();
 		source = envCredsSource;
 		target = envCredsTarget;
 	}
 
+	// * validate source
 	if ((isNotSet(source.acct) && isNotSet(source.pass)) && isNotSet(source.bearer)) {
 		log(`	⚠️ ERROR: you did not specify service account or bearer token for your SOURCE project ⚠️`);
 		log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`);
 		process.exit(0);
 	}
-	
-	buildAuth(source)
+
+	buildAuth(source);
 	let { dash_id } = source;
 	if (!dash_id) dash_id = [];
 
 	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities, shouldCopySchema, silent, skipPrompt } = opts;
+
+	// * validate target
 	if (shouldCopyEntities || shouldCopyProfiles || shouldCopyEvents || shouldCopySchema) {
 		if ((isNotSet(target.acct) && isNotSet(target.pass)) && isNotSet(target.bearer)) {
 			log(`	⚠️ ERROR: you did not specify service account or bearer token for your TARGET project ⚠️`);
@@ -118,14 +122,13 @@ async function main(
 			process.exit(0);
 		}
 	}
-	buildAuth(target)
-
+	buildAuth(target);
 	time('migrate', 'start');
 	track('start', { runId, ...opts });
 
 	/*
 	-------
-	FETCH SOURCE
+	! FETCH SOURCE
 	-------
 	*/
 
@@ -250,10 +253,7 @@ async function main(
 			sourceCustProps = sourceCustProps.filter((custProp) => {
 				return dependentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
 			});
-
 		}
-
-
 	}
 
 	if (shouldGenerateSummary) {
@@ -276,7 +276,7 @@ async function main(
 	if (shouldCopyProfiles) {
 		intentString += `${u.comma(numProfiles)} user profiles\n`;
 	}
-	//todo don't copy schema for dash_id
+	
 	if (shouldCopyEntities) {
 		if (dash_id.length === 0 && shouldCopySchema) {
 			intentString += `${u.comma(sourceSchema.length)} events & props schema\n`;
@@ -301,7 +301,7 @@ from project: ${source.project} to project: ${target.project}
 
 `);
 	if (!skipPrompt) {
-		await u.continuePrompt()
+		await u.continuePrompt();
 	}
 
 
@@ -312,14 +312,14 @@ from project: ${source.project} to project: ${target.project}
 
 	/*
 	-------
-	WRITE TO TARGET
+	! WRITE TO TARGET
 	-------
 	*/
 
 	log(`\nPROCEEDING WITH COPY!\n`);
 
 	//TARGET
-	log(`validating target service account...`, null, true);
+	log(`validating target credentials...`, null, true);
 	let targetWorkspace = await u.validateServiceAccount(target);
 	target.workspace = targetWorkspace.id;
 	target = { ...targetWorkspace, ...target };

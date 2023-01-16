@@ -191,4 +191,4 @@ let target = {
 }
 let result = await entityDelete(target)
 ```
-i'm serious... there's no way to undo this. unfortunutely this will not not delete events or profiles in the project.
+i'm serious... there's no way to undo this. unfortunately this will not not delete events or profiles in the project.

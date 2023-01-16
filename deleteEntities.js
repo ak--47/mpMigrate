@@ -7,9 +7,12 @@ const cli = require('./cli')
 const types = require('./types.js');
 
 /**
- * 
- * @param {types.Target} target 
- * @returns 
+ * project delete!
+ * @example
+ * const { entityDelete } = require('mp-migrate')
+ * const deletion = await entityDelete(target)
+ * @param {types.Target} target `{acct, pass, bearer, project, region}`
+ * @returns {Promise<Object>} Summary Data of Deletion
  */
 async function main(target = {
     acct: "",
@@ -77,7 +80,8 @@ for project: ${target.project}
     log(`deleting schema...`, null, true)
     let deletedSchema = await fetch(URLs.postSchema(project, region), {
         method: `delete`,
-        headers: { Authorization: auth}
+		// @ts-expect-error
+        headers: { Authorization : auth}
     }).catch((e) => {
         debugger;
     })
@@ -87,6 +91,7 @@ for project: ${target.project}
     for (const custEvent of customEvents) {
         await fetch(URLs.delCustEvent(workspace, region), {
             method: `delete`,
+			// @ts-expect-error
             headers: { Authorization: auth},
             data: { "events": [{ "collectEverythingEventId": null, "customEventId": custEvent.id, "id": 0 }] }
         }).catch((e) => {
@@ -98,6 +103,7 @@ for project: ${target.project}
     for (const custProp of customProps) {
         await fetch(URLs.delCustProp(project, custProp.customPropertyId, region), {
             method: `delete`,
+			// @ts-expect-error
 			headers: { Authorization: auth},
         }).catch((e) => {
             custProp
@@ -116,6 +122,7 @@ for project: ${target.project}
         // @ts-ignore
         deletedCohorts = await fetch(URLs.deleteCohorts(project, region), {
             method: `post`,
+			// @ts-expect-error
 			headers: { Authorization: auth},
             data: { cohort_ids: cohortIds }
         }).catch((e) => {
@@ -131,6 +138,7 @@ for project: ${target.project}
     for (const dash of targetDashes) {
         let deletedDashboard = await fetch(URLs.getSingleDash(workspace, dash.id, region), {
             method: `delete`,
+			// @ts-expect-error
 			headers: { Authorization: auth}
         })
         deletedDashboards.push(deletedDashboard.data.results)
