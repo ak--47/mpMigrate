@@ -8,14 +8,17 @@ const makeDir = require('fs').mkdirSync;
 const dayjs = require('dayjs');
 const path = require('path');
 const dateFormat = `YYYY-MM-DD`;
+// @ts-ignore
 const mpImport = require('mixpanel-import');
-const prompt = require('prompt');
 const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
+// @ts-ignore
 const u = require('ak-tools');
 const track = u.tracker('mp-migrate');
 const inquirer = require('inquirer');
-const { spawn } = require('child_process')
+const { spawn } = require('child_process');
+// @ts-ignore
+const types = require('./types')
 
 // retries on 503: https://stackoverflow.com/a/64076585
 // TODO on 500, just change the report name
@@ -30,6 +33,7 @@ axiosRetry(fetch, {
 		// if retry condition is not specified, by default idempotent requests are retried
 		return error.response.status === 503 || error.response.status === 409;
 	},
+	// @ts-ignore
 	onRetry: function (retryCount, error, requestConfig) {
 		if (error.response.status === 409) {
 			const oldEntity = JSON.parse(requestConfig.data);
@@ -213,6 +217,7 @@ exports.getCohorts = async function (creds) {
 		console.error(`${e.message} : ${e.response.data.error}`);
 		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -228,6 +233,7 @@ exports.getAllDash = async function (creds) {
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
 		return await exports.continuePrompt
+	// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -243,6 +249,7 @@ exports.getDashReports = async function (creds, dashId) {
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
 		return await exports.continuePrompt
+	// @ts-ignore
 	})).data?.results;
 
 	const dashSummary = {
@@ -268,6 +275,7 @@ exports.getSchema = async function (creds) {
 		console.error(`${e.message} : ${e.response.data.error}`);
 		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -275,6 +283,7 @@ exports.getSchema = async function (creds) {
 };
 
 exports.getCustomEvents = async function (creds) {
+	// @ts-ignore
 	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomEvents(workspace, region), {
 		headers: { Authorization: auth }
@@ -290,6 +299,7 @@ exports.getCustomEvents = async function (creds) {
 };
 
 exports.getCustomProps = async function (creds) {
+	// @ts-ignore
 	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomProps(workspace, region), {
 		headers: { Authorization: auth }
@@ -300,6 +310,7 @@ exports.getCustomProps = async function (creds) {
 		console.error(`${e.message} : ${e.response.data.error}`);
 		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data.results;
 
 	return res;
@@ -340,10 +351,12 @@ exports.postSchema = async function (creds, schema) {
 		return await exports.continuePrompt
 	});
 
+	// @ts-ignore
 	return res.data.results;
 };
 
 
+// @ts-ignore
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
 	//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
 	let { auth, workspace, project, region } = targetCreds;
@@ -373,15 +386,19 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 			return {};
 		});
 
+		// @ts-ignore
 		results.push(createdCohort?.data?.results);
 
 		if (failed) {
 			continue createCohorts;
 		} else {
+			// @ts-ignore
 			await fetch(URLs.shareCohort(project, createdCohort.data.results.id), {
 				method: 'post',
 				headers: { Authorization: auth },
+				// @ts-ignore
 				data: { "id": createdCohort.data.results.id, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -426,6 +443,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 			return {};
 
 		});
+		// @ts-ignore
 		let customProp = createdCustProp?.data?.results;
 		results.push(customProp);
 		if (failed) {
@@ -436,6 +454,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 				method: 'post',
 				headers: { Authorization: auth },
 				data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -446,6 +465,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 };
 
 //TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
+// @ts-ignore
 exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
 	let { auth, project, workspace, region } = creds;
 	let results = [];
@@ -462,8 +482,9 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 		let custPayload = new FormData();
 		custPayload.append('name', name);
 		custPayload.append('alternatives', JSON.stringify(alternatives));
-		custPayload.append('Authorization', auth);
+
 		let headers = custPayload.getHeaders();
+		headers.Authorization = auth;
 
 		let createdCustEvent = await fetch(URLs.createCustomEvent(workspace, region), {
 			method: 'post',
@@ -478,6 +499,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			return {};
 		});
 
+		// @ts-ignore
 		let customEvent = createdCustEvent?.data?.custom_event;
 		results.push(customEvent);
 
@@ -490,6 +512,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 				method: 'post',
 				headers: { Authorization: auth },
 				data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -519,6 +542,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	let targetEntities = { custEvents: targetCustEvents, custProps: targetCustProps, cohorts: targetCohorts };
 	let matchedEntities = await matchCustomEntities(sourceCreds, sourceEntities, targetEntities);
 	let matches = [...matchedEntities.cohorts, ...matchedEntities.custEvents, ...matchedEntities.custProps]
+		// @ts-ignore
 		.map(x => [x.sourceId, x.targetId])
 		.filter(x => Boolean(x[0]) && Boolean(x[1]));
 	let newDashes;
@@ -536,6 +560,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const reports = [];
 		const media = [];
 		const text = [];
+		// @ts-ignore
 		const layout = dash.LAYOUT;
 		const reportResults = [];
 		const mediaResults = [];
@@ -587,6 +612,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			return {};
 
 		});
+		// @ts-ignore
 		results.dashes.push(createdDash?.data?.results);
 
 		if (failed) {
@@ -596,16 +622,20 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const oldDashLayout = OGDashes[dashCount].LAYOUT;
 
 		//use new dash id to make reports
+		// @ts-ignore
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
 		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts, oldDashLayout);
 		const createdMedia = await makeMedia(targetCreds, media, oldDashLayout);
 		const createdText = await makeText(targetCreds, text, oldDashLayout);
 		//ack ... refactor this junk
+		// @ts-ignore
 		results.reports.push(createdReports);
 		reportResults.push(createdReports);
+		// @ts-ignore
 		results.media.push(createdMedia);
 		mediaResults.push(createdMedia);
+		// @ts-ignore
 		results.text.push(createdText);
 		textResults.push(createdText);
 
@@ -622,6 +652,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			debugger;
 		});
 
+		// @ts-ignore
 		results.shares.push(sharedDash);
 
 		//pin dashboards
@@ -629,14 +660,17 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			method: `post`,
 			headers: { Authorization: auth },
 			data: {}
+		// @ts-ignore
 		}).catch((e) => {
 			debugger;
 		});
 
+		// @ts-ignore
 		results.pins.push(pinnedDash);
 
 		// UPDATE LAYOUT
 		const allCreatedEntities = [...reportResults, ...mediaResults, ...textResults].flat();
+		// @ts-ignore
 		const currentDashId = results.dashes.slice().pop()?.id;
 		const mostRecentNewDashLayout = (await exports.getDashReports(targetCreds, currentDashId)).layout;
 		//const mostRecentNewDashLayout = Object.values(results).flat().flat().pop().results.layout;
@@ -653,6 +687,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			return {};
 		});
 
+		// @ts-ignore
 		results.layoutUpdates.push(layoutUpdate);
 	}
 
@@ -709,6 +744,7 @@ exports.exportAllProfiles = async function (source, target) {
 		},
 	})).data;
 
+	// @ts-ignore
 	let { page, page_size, session_id, total } = response;
 	let lastNumResults = response.results.length;
 	let profiles = response.results.map(function (person) {
@@ -962,6 +998,7 @@ exports.sendEvents = async function (source, target, transform) {
 		verbose: false,
 		transformFunc: transform
 	};
+	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);
 
 	return importedData;
@@ -984,6 +1021,7 @@ exports.sendProfiles = async function (source, target, transform) {
 		logs: true, //print to stdout?
 		transformFunc: transform
 	};
+	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);
 
 	return importedData;
@@ -996,6 +1034,7 @@ REPORT MAKERS
 -------------
 */
 const makeMedia = async function (creds, media = [], oldDashLayout) {
+	// @ts-ignore
 	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGMedia = clone(media);
@@ -1022,6 +1061,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 		});
 
 		if (failed) continue loopMedia;
+		// @ts-ignore
 		const createdMediaCardId = createMediaCard.data.results.new_content.id;
 
 		//get rid of disallowed keys
@@ -1061,15 +1101,19 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 
 		if (!failed) {
 			const oldId = OGMedia[mediaCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			updatedMediaCard.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = updatedMediaCard.data.results.layout.rows[updatedMediaCard.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			updatedMediaCard.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1077,6 +1121,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 			};
 		}
 
+		// @ts-ignore
 		results.push(updatedMediaCard?.data || updatedMediaCard);
 		if (failed) {
 			continue loopMedia;
@@ -1088,6 +1133,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 };
 
 const makeText = async function (creds, text = [], oldDashLayout) {
+	// @ts-ignore
 	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGText = clone(text);
@@ -1113,6 +1159,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 		});
 
 		if (failed) continue loopText;
+		// @ts-ignore
 		const createdTextCardId = createTextCard.data.results.new_content.id;
 
 		//get rid of disallowed keys
@@ -1152,15 +1199,19 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 
 		if (!failed) {
 			const oldId = OGText[textCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			updatedTextCard.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = updatedTextCard.data.results.layout.rows[updatedTextCard.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			updatedTextCard.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1168,6 +1219,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 			};
 		}
 
+		// @ts-ignore
 		results.push(updatedTextCard?.data || updatedTextCard);
 		if (failed) {
 			continue loopText;
@@ -1177,7 +1229,9 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 	return results;
 };
 
+// @ts-ignore
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
+	// @ts-ignore
 	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGReport = clone(reports);
@@ -1228,15 +1282,19 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 		if (!failed) {
 			const oldId = OGReport[reportCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			createdReport.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = createdReport.data.results.layout.rows[createdReport.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			createdReport.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1244,6 +1302,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 			};
 		}
 
+		// @ts-ignore
 		results.push(createdReport?.data || createdReport);
 		if (failed) {
 			continue loopReports;
@@ -1272,8 +1331,10 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 		rows: [] //rows: {}
 	};
 
+	// @ts-ignore
 	const numRows = oldDash.order.length;
 	const newRows = newDash.order.slice();	//slice(0, numRows);
+	// @ts-ignore
 	newLayout.rows_order = [...newRows];
 
 	for (const [index, rowId] of Object.entries(newRows)) {
@@ -1291,6 +1352,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 
 			//carefully place the card with the source layout settings but the target ids
 			for (const card of itemsInRow) {
+				// @ts-ignore
 				rowTemplate.cells.push({
 					//these two keys verify the match but are not required in the payload
 					//content_id: card.ids.content_id,
@@ -1301,6 +1363,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 			}
 		}
 
+		// @ts-ignore
 		newLayout.rows.push(rowTemplate);
 
 	}
@@ -1355,6 +1418,7 @@ const removeNulls = function (obj) {
 	for (var k in obj) {
 		// falsy values
 		if (!Boolean(obj[k])) {
+			// @ts-ignore
 			isArray ? obj.splice(k, 1) : delete obj[k];
 		}
 
@@ -1482,11 +1546,17 @@ SUMMARY GENERATORS
 exports.saveLocalSummary = async function (projectMetaData) {
 	const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData;
 	const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
+	// @ts-ignore
 	const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary);
+	// @ts-ignore
 	const writeSchema = await writeFile(path.resolve(`${source.localPath}/payloads/schema.json`), json(schema));
+	// @ts-ignore
 	const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/payloads/customEvents.json`), json(customEvents));
+	// @ts-ignore
 	const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/payloads/customProps.json`), json(customProps));
+	// @ts-ignore
 	const writeCohorts = await writeFile(path.resolve(`${source.localPath}/payloads/cohorts.json`), json(cohorts));
+	// @ts-ignore
 	const writeDashes = await writeFile(path.resolve(`${source.localPath}/payloads/dashboards.json`), json(dashes));
 
 	//reveal the folder
@@ -1519,6 +1589,7 @@ const makeSummary = async function (projectMetaData) {
 };
 
 const makeSchemaSummary = function (schema) {
+	// @ts-ignore
 	const title = ``;
 	const events = schema.filter(x => x.entityType === 'event');
 	const profiles = schema.filter(x => x.entityType === 'profile');

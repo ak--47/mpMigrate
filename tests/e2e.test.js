@@ -48,9 +48,8 @@ describe('module', () => {
 		expect(targetDashes.length).toBe(3)
 		
 		expect(sourceSchema.length).toBe(1)
-		expect(targetSchema.added).toBe(1)
-		// ! TODO FIX CUSTOMER EVENT TESTS!
-		//expect(targetCustEvents.length).toBe(2)
+		expect(targetSchema.added).toBe(1)		
+		expect(targetCustEvents.length).toBe(2)
 		
 		expect(targetCustProps.length).toBe(2)
 
