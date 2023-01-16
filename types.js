@@ -1,4 +1,4 @@
-const mpTypes = require('./node_modules/mixpanel-import/types.js')
+const mpTypes = require('./node_modules/mixpanel-import/types.js');
 
 /**
  * @namespace types
@@ -49,5 +49,23 @@ const mpTypes = require('./node_modules/mixpanel-import/types.js')
  * @property {Target} envCredsTarget
  */
 
+
+/**
+ * @typedef {Object} Summary
+ * @property {Source} source
+ * @property {Target} [target]
+ * @property {Object[]} [sourceSchema]
+ * @property {Object[]} [sourceCohorts]
+ * @property {Object[]} [sourceDashes]
+ * @property {Object[]} [targetSchema]
+ * @property {Object[]} [targetCohorts]
+ * @property {Object[]} [targetCustEvents]
+ * @property {Object[]} [targetCustProps]
+ * @property {Object[]} [targetDashes]
+ * @property {Object[]} [targetReports]
+ * @property {Object[]} [sourceExportEvents]
+ * @property {string} [sourceExportProfiles]
+ * @property {string} logs
+ */
 
 exports.unused = {};

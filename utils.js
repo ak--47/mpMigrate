@@ -117,9 +117,9 @@ exports.validateServiceAccount = async function (creds) {
 		process.exit(1);
 	})).data.results;
 
-	globalView[0].api_key = metaData.api_key;
-	globalView[0].secret = metaData.secret;
-	globalView[0].token = metaData.token;
+	globalView[0].api_key = metaData?.api_key;
+	globalView[0].secret = metaData?.secret;
+	globalView[0].token = metaData?.token;
 
 	return globalView[0];
 };

@@ -220,7 +220,7 @@ function notEmpty(str) {
 }
 
 function isValid(p) {
-	if (!(p.acct && p.pass) || p.bearer) {
+	if (!(p.acct && p.pass) && p.bearer) {
 		return false;
 	}
 

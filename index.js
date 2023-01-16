@@ -9,10 +9,7 @@
 /*
 -------
 TODOS:
-	bearer auth
-	https://github.com/nanovazquez/yargs-interactive
-	dashboard filters with custom props
-	custom events with custom props
+	fix custom events
 -------
 */
 
@@ -58,11 +55,11 @@ global.runId = runId;
 /**
  * mpMigrate!
  * @example
- * foo: bar :Baz
+ * const migration = await mpMigrate(source, target, options)
  * @param {types.Source} source 
  * @param {types.Target} target 
  * @param {types.Options} opts 
- * @returns {Object}
+ * @returns {Promise<types.Summary>}
  */
 async function main(
 	source = {
@@ -134,7 +131,7 @@ async function main(
 
 	//SOURCE
 	//validate service account & get workspace id
-	log(`validating source service account...`, null, true);
+	log(`validating credentials...`, null, true);
 	let sourceWorkspace = await u.validateServiceAccount(source);
 	source.workspace = sourceWorkspace.id;
 	let dataFolder = await u.makeProjectFolder(sourceWorkspace);
