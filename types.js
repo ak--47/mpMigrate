@@ -1,4 +1,3 @@
-const mpTypes = require('./node_modules/mixpanel-import/types.js');
 
 /**
  * @namespace types
@@ -32,8 +31,8 @@ const mpTypes = require('./node_modules/mixpanel-import/types.js');
 
 /**
  * @typedef {Object} Options
- * @property {function(): mpTypes.mpEvent} transformEventsFunc
- * @property {function(): mpTypes.mpUser} transformProfilesFunc
+ * @property {function(): mpEvent} transformEventsFunc
+ * @property {function(): mpUser} transformProfilesFunc
  * @property {boolean} shouldGenerateSummary
  * @property {boolean} shouldCopyEvents
  * @property {boolean} shouldCopyProfiles
@@ -68,6 +67,26 @@ const mpTypes = require('./node_modules/mixpanel-import/types.js');
  * @property {string} logs
  */
 
+
+/**
+ * @typedef {Object} mpEvent - a mixpanel event
+ * @property {string} event - the event name
+ * @property {mpProperties} properties - the event's properties
+ */
+
+/**
+ * @typedef {Object} mpProperties - mixpanel event properties
+ * @property {string} distinct_id - uuid of the end user
+ * @property {string} time - the UTC time of the event
+ * @property {string} $insert_id - 
+ */
+
+/**
+ * @typedef {Object} mpUser - a mixpanel user profile
+ * @property {string} $token - the project token
+ * @property {string} $distinct_id - the uuid of the user
+ * @property {profileDirective} - a `$set` style operation
+ */
 
 
 exports.unused = {};
