@@ -58,6 +58,28 @@ describe('module', () => {
 	});
 });
 
+describe('dashes', () => {
+	jest.setTimeout(600000)
+	test('properly runs a dash id', async () => {		
+		const {envCredsSource, envCredsTarget} = getEnvCreds()
+		const result = await projectCopy(envCredsSource, envCredsTarget, {...options, dash_id: [3657621]});
+		const {sourceCohorts, sourceDashes, sourceSchema, targetCohorts, targetCustEvents, targetCustProps, targetDashes, targetSchema, targetReports} = result
+		expect(sourceCohorts.length).toBe(0)
+		expect(targetCohorts.length).toBe(0)
+		
+		expect(sourceDashes.length).toBe(1)
+		expect(targetDashes.length).toBe(1)
+		
+		expect(sourceSchema.length).toBe(1)
+		expect(targetSchema.added).toBe(1)		
+		expect(targetCustEvents.length).toBe(0)
+		
+		expect(targetCustProps.length).toBe(1)
+
+		expect(targetReports.length).toBe(6)
+		
+	});
+});
 
 // describe('cli', () => {
 // 	// test('events', async () => {

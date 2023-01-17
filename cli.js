@@ -43,8 +43,8 @@ exports.cli = async function () {
 		console.log('\n');
 		if (howAuth.auth === "service") {
 			const authSrc = await ask([
-				...authQuestions("service", "SOURCE"),
-				...standardQuestions("SOURCE")
+				...authQuestions("service", "SOURCE", source),
+				...standardQuestions("SOURCE", source)
 			]);
 			console.log('\n');
 			source.acct = authSrc.acct;
@@ -55,8 +55,8 @@ exports.cli = async function () {
 			if (whatIsYourPurpose.intent === 'copy') {
 				//need a target
 				const authDest = await ask([
-					...authQuestions("service", "TARGET"),
-					...standardQuestions("TARGET")
+					...authQuestions("service", "TARGET", target),
+					...standardQuestions("TARGET", target)
 				]);
 
 				target.acct = authDest.acct;
@@ -69,8 +69,8 @@ exports.cli = async function () {
 
 		if (howAuth.auth === "bearer") {
 			const authSrc = await ask([
-				...authQuestions("bearer", "SOURCE"),
-				...standardQuestions("SOURCE")
+				...authQuestions("bearer", "SOURCE", source),
+				...standardQuestions("SOURCE", source)
 			]);
 
 			source.bearer = authSrc.bearer;
@@ -80,8 +80,8 @@ exports.cli = async function () {
 			if (whatIsYourPurpose.intent === 'copy') {
 				//need a target	
 				const authDest = await ask([
-					...authQuestions("bearer", "TARGET"),
-					...standardQuestions("TARGET")
+					...authQuestions("bearer", "TARGET", target),
+					...standardQuestions("TARGET", target)
 				]);
 
 				target.bearer = authDest.bearer;
@@ -104,7 +104,8 @@ exports.cli = async function () {
 		source.dash_id = optConfig.dash_id
 			?.split(",")
 			?.map(s => s.trim())
-			?.filter(a => a) || [];
+			?.filter(a => a)
+			?.map(Number) || [];
 
 		if (optConfig.shouldCopyEvents) {
 			console.log('\n');
@@ -268,12 +269,13 @@ function firstQuestions() {
 		}];
 }
 
-function standardQuestions(label = `SOURCE`) {
+function standardQuestions(label = `SOURCE`, config = {}) {
 	return [{
 		type: "input",
 		message: `${label} PROJECT: what is your project's ID?`,
 		name: "project",
-		validate: notEmpty
+		validate: notEmpty,
+		default: config.project || ""
 	},
 	{
 		type: "input",
@@ -284,20 +286,22 @@ function standardQuestions(label = `SOURCE`) {
 }
 
 
-function authQuestions(type, label) {
+function authQuestions(type, label, config = {}) {
 	if (type === "service") {
 		return [
 			{
 				type: "input",
 				message: `${label} PROJECT: what is your service account user name?`,
 				name: "acct",
-				validate: notEmpty
+				validate: notEmpty,
+				default: config.acct || ""
 			},
 			{
 				type: "input",
 				message: `${label} PROJECT: what is your service account secret?`,
 				name: "pass",
-				validate: notEmpty
+				validate: notEmpty,
+				default: config.pass || ""
 			}];
 	}
 
@@ -307,7 +311,8 @@ function authQuestions(type, label) {
 				type: "input",
 				message: `${label} PROJECT: what is your bearer token?`,
 				name: "bearer",
-				validate: notEmpty
+				validate: notEmpty,
+				default: config.bearer || ""
 			}
 		];
 	}
@@ -335,7 +340,7 @@ function optionsQuestions(srcPid, destPid) {
 		{
 			type: "input",
 			message: `copy specific boards(s) from project ${srcPid} to project ${destPid}?`,
-			suffix: "\n\tenter comma separated list of board ids (or leave blank to copy all boards)\n",
+			suffix: `\n\tenter comma separated list of board ids in project ${srcPid} (or leave blank to copy all boards)\n`,
 			name: "dash_id",
 			validate: dashCopyValidate
 		},

@@ -18,6 +18,7 @@ const del = require('./deleteEntities.js');
 const walkthrough = require('./cli.js');
 const path = require('path');
 const types = require('./types.js');
+const { spawn } = require('child_process');
 
 
 /*
@@ -26,9 +27,7 @@ const types = require('./types.js');
 ----
 */
 
-
 const dayjs = require('dayjs');
-
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
@@ -95,7 +94,7 @@ async function main(source, target, opts, isCli = false) {
 	});
 
 	// * .env
-	if (!isCli && !(source.acct || source.pass) || !source.bearer) {
+	if (!isCli && (!(source.acct || source.pass) || !source.bearer)) {
 		const { envCredsSource, envCredsTarget } = walkthrough.getEnvCreds();
 		source = envCredsSource;
 		target = envCredsTarget;
@@ -185,14 +184,14 @@ async function main(source, target, opts, isCli = false) {
 		if (source?.dash_id?.length || 0 > 0) {
 			sourceDashes = sourceDashes.filter((dash) => {
 				return source.dash_id.some((specifiedId) => {
-					return specifiedId === dash.id;
+					return specifiedId == dash.id;
 				});
 			});
 		}
 
 		//for each dashboard, get metadata for every child report
 		log(`querying reports metadata...`, null, true);
-		sourceFoundReports = 0;
+			sourceFoundReports = 0;
 		sourceFoundMedia = 0;
 		sourceFoundText = 0;
 		for (const [index, dash] of sourceDashes.entries()) {
@@ -276,11 +275,13 @@ async function main(source, target, opts, isCli = false) {
 	if (shouldCopyProfiles) {
 		intentString += `${u.comma(numProfiles)} user profiles\n`;
 	}
-	
+
+	if (shouldCopySchema) {
+		intentString += `${u.comma(sourceSchema.length)} events & props schema\n`;
+	}
+
 	if (shouldCopyEntities) {
-		if (dash_id.length === 0 && shouldCopySchema) {
-			intentString += `${u.comma(sourceSchema.length)} events & props schema\n`;
-		}
+
 		intentString += `${u.comma(sourceCustEvents.length)} custom event(s)
 ${u.comma(sourceCustProps.length)} custom prop(s)
 ${u.comma(sourceCohorts.length)} cohort(s)
@@ -441,6 +442,17 @@ from project: ${source.project} to project: ${target.project}
 	await u.writeFile(`${dataFolder}/log.txt`, logs);
 	await u.writeFile(`${dataFolder}/rawLog.json`, JSON.stringify(everyThingTheScriptDid, null, 2));
 
+	// show them to the user
+	if (isCli) {
+		try {
+			openExplorerInMac(path.resolve(`${source.localPath}`));
+		}
+
+		catch (e) {
+
+		}
+	}
+
 	return everyThingTheScriptDid;
 }
 
@@ -481,6 +493,17 @@ function time(label = `foo`, directive = `start`) {
 	}
 
 }
+
+
+const openExplorerInMac = function (path, callback) {
+	path = path || '/';
+	let p = spawn('open', [path]);
+	p.on('error', (err) => {
+		p.kill();
+		return callback(err);
+	});
+};
+
 
 /**
  * 

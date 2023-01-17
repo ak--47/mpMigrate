@@ -16,7 +16,7 @@ const axiosRetry = require('axios-retry');
 const u = require('ak-tools');
 const track = u.tracker('mp-migrate');
 const inquirer = require('inquirer');
-const { spawn } = require('child_process');
+
 // @ts-ignore
 const types = require('./types')
 
@@ -1509,15 +1509,6 @@ exports.writeFile = async function (filename, data) {
 	await fs.writeFile(filename, data);
 };
 
-const openExplorerInMac = function (path, callback) {
-	path = path || '/';
-	let p = spawn('open', [path]);
-	p.on('error', (err) => {
-		p.kill();
-		return callback(err);
-	});
-};
-
 function log(message, data, hasResponse = false) {
 
 	if (message) {
@@ -1559,14 +1550,6 @@ exports.saveLocalSummary = async function (projectMetaData) {
 	// @ts-ignore
 	const writeDashes = await writeFile(path.resolve(`${source.localPath}/payloads/dashboards.json`), json(dashes));
 
-	//reveal the folder
-	try {
-		openExplorerInMac(path.resolve(`${source.localPath}`));
-	}
-
-	catch (e) {
-
-	}
 };
 
 const makeSummary = async function (projectMetaData) {

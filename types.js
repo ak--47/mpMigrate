@@ -85,7 +85,18 @@
  * @typedef {Object} mpUser - a mixpanel user profile
  * @property {string} $token - the project token
  * @property {string} $distinct_id - the uuid of the user
- * @property {profileDirective} - a `$set` style operation
+ * @property {profileDirective} $set - a `$set` style operation
+ */
+
+/**
+ * @typedef {Object} profileDirective
+ * @property {Object} [$set]
+ * @property {Object} [$set_once]
+ * @property {Object} [$add]
+ * @property {Object} [$union]
+ * @property {Object} [$append]
+ * @property {Object} [$remove]
+ * @property {Object} [$unset]
  */
 
 
