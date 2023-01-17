@@ -4,7 +4,22 @@
 
 `mpMigrate` is a command-line ETL script in Node.js that provides one-time mixpanel **project migrations**. [watch the demo](#demo) to see it in action.
 
-essentially, this utility can **copy** most saved entities in any mixpanel project including:
+## tldr; <div id="cli"></div>
+
+the simplest way to get started is to use the CLI; from your shell
+
+```
+npx --yes mp-migrate@latest
+```
+(requires [node.js v16.x](https://nodejs.org/en/download/))
+
+the cli wizard will walk you through your migration. logs are stashed in `./savedProjects/<project name>` 
+
+
+
+## about
+
+this utility can **copy** most saved entities in any mixpanel project including:
 
  - events
  - user profiles
@@ -15,7 +30,9 @@ essentially, this utility can **copy** most saved entities in any mixpanel proje
  - custom events
  - custom properties
 
-using [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts), this script copies JSON payloads from saved entities in a source project to and creates new entities in a target project.
+you can authenticate using [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts) or a [bearer token](https://mixpanel.com/oauth/access_token)
+
+the script will copy JSON payloads from saved entities in a **source project** to and create those as new entities in a **target project**.
 
 there are a number of use-cases for this script including:
 
@@ -25,7 +42,7 @@ there are a number of use-cases for this script including:
  - auditing an existing project's saved entities
  - "Starting Over" without losing your work.
 
-this software can be [run as a CLI](#CLI) (using environment variables) or implemented as a [native module in code](#module). It can also be used to [delete all saved entities](#delete) in a project
+this software can be [run as a CLI](#cli) (using environment variables) or implemented as a [native module in code](#module). It can also be used to [delete all saved entities](#delete) in a project
 
 currently **not** supported:
 
@@ -37,12 +54,13 @@ currently **not** supported:
  - session/group keys/timezone and other global project settings
  - saved entity permissions (defaults to global access to all users)
 
+## storing credentials
 
-## tldr;
-- create credentials file:
+if you do not wish to entire your credentials each time, you can (optionally) create a `.env` credentials file in your current working directory, which the script will then use for auth details:
 ```bash
 echo "SOURCE_ACCT = '' 
-SOURCE_PASS = '' 	
+SOURCE_PASS = ''
+SOURCE_BEARER = '' 	
 SOURCE_PROJECT = '' 
 SOURCE_DATE_START = '' 
 SOURCE_DATE_END = ''
@@ -50,18 +68,20 @@ SOURCE_REGION = ''
 SOURCE_DASH_ID = ''
 
 TARGET_ACCT = '' 	
-TARGET_PASS = '' 	
+TARGET_PASS = ''
+TARGET_BEARER = '' 	 	
 TARGET_PROJECT = ''	
 TARGET_REGION = ''" > .env
 ```
-see [CLI Usage](#CLI)  for an annotated example 
+**none of these params are required** ... if a value is empty, the CLI will prompt you for a value
 
-- edit your **SOURCE** and **TARGET** environment variables according to this table:
+- if using `.env`, edit your **SOURCE** and **TARGET** environment variables according to this table:
 
 | VAR                 |  default | notes                                                       |
 |------------------------|----------------------|-------------------------------------------------------------|
 |`SOURCE_ACCT`  | --- | the service account of your SOURCE project |
 |`SOURCE_PASS`  | --- | the service account secret of your SOURCE project |
+|`SOURCE_BEARER`  | --- | the bearer token (if applicable) for your SOURCE project |
 |`SOURCE_PROJECT`  | --- | the SOURCE's `project_id` |
 |`SOURCE_DATE_START`  | TODAY | optional: if copying events - when to start `MM-DD-YYYY` |
 |`SOURCE_DATE_END`  | TODAY | optional: if copying events - when to end `MM-DD-YYYY` |
@@ -69,54 +89,15 @@ see [CLI Usage](#CLI)  for an annotated example
 |`SOURCE_DASH_ID`  | --- | optional: a `dashboard_id` (or comma sep list of `dashboard_id`s) for coping a subset of dashboards |
 |`TARGET_ACCT`  | --- | the service account of your TARGET project |
 |`TARGET_PASS`  | --- | the service account secret of your TARGET project |
+|`SOURCE_BEARER`  | --- | the bearer token (if applicable) for your TARGET project |
 |`TARGET_PROJECT`  | --- | the TARGET project id |
 |`TARGET_REGION`  | `'US'` |  `US` or `EU` |
 
+(note: **service account** and **bearer token** authentication options are mutually exclusive; if you provide _both_ the bearer token will be used)
 
-- then migrate
-
-```bash
-$ npx mp-migrate
-```
-
-logs are stashed in `./savedProjects/<project name>` 
 
 # DEMO <div id="demo"></div>
 [![mpMigrate Demo](https://aktunes.neocities.org/mpMigrate/migrateThumb.png)](https://youtu.be/jOCcFiT53gU)
-
-## CLI <div id="CLI"></div>
-`mpMigrate` can be used as a command-line-interface which offers the user choices about which entities it will copy.
-
-in this mode, a `.env` file is used to configure the `source` and `target` projects of the form:
-
-```bash
-SOURCE_ACCT = '' 		#REQ: the service account of your SOURCE project
-SOURCE_PASS = '' 		#REQ: the service account secret of your SOURCE project
-SOURCE_PROJECT = '' 	#REQ: the SOURCE project id
-SOURCE_DATE_START = '' 	#optional: if copying events - when to start MM-DD-YYYY
-SOURCE_DATE_END = ''	#optional: if copying events - when to end MM-DD-YYYY
-SOURCE_REGION = '' 		#optional: if US... mandatory if 'EU'
-
-#optional: a dashboard id (or comma separated list of dashboard ids) 
-#to copy ONLY these dashboards to the target
-SOURCE_DASH_ID = '' 	
-
-TARGET_ACCT = '' 		#REQ: the service account of your TARGET project
-TARGET_PASS = '' 		#REQ: the service account secret of your TARGET project
-TARGET_PROJECT = ''		#REQ: the TARGET project id
-TARGET_REGION = ''		#optional: if US... mandatory if 'EU'
-```
-with that configuration file present in the same directory, you can then run:
-```bash
-$ npx mp-migrate@latest
-```
-as the script runs, it will give you choices about which entities to copy:
-
-![which entities to copy?](https://aktunes.neocities.org/mpMigrate/migrate1.png)
-
-and will ask you to confirm your choice:
-
-![enter image description here](https://aktunes.neocities.org/mpMigrate/migrate2.png)
 
 ## Module <div id="module"></div>
 
@@ -134,17 +115,27 @@ and finally
 
 ```javascript
 let source = {
+	// choose service acct + pass or bearer
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
+	bearer: `{{ bearer token}}`,
+	
+	//required
 	project: 12345,
-	region: "US",
+	region: "US", //default 'US'
+
+	//optional
+	dash_id: ['12345', '67890'] //list of dashboards to copy
 	start: "04-20-2022", //date of first event	
 	end: "04-201-2022" //date of last event
-	dash_id: ['12345', '67890'] //list of dashboards to copy
 }
 let target = {
+	// choose service acct + pass or bearer
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
+	bearer: `{{ bearer token}}`,
+	
+	//required
 	project: 67890,
 	region: "EU"
 }
@@ -155,25 +146,40 @@ const migrateProjects = await projectCopy(source, target)
 
 ### specifying options
 
-you can pass a third `options` object to the module of the form:
+you can pass a third `options` object to the module; these are all the default values:
 
 ```javascript
 let options = {
-	transformEventsFunc: x => x, // will be called on every event
-	transformProfilesFunc: x => x, // will be called on every profile
-	shouldGenerateSummary: false, //generate a summary of the source project?
-	shouldCopyEvents: false, //copy events from source to target?
-	shouldCopyProfiles: false, //copy user profiles from source to target?
-	shouldCopyEntities: true //copy saved entities from source to target?
-	silent: false, //if true, will not print console messages
-	skipPrompt: false //if true, will skip the confirmation prompt... use at own risk!
+	// will be called on every event
+	transformEventsFunc: x => x, 
+
+	// will be called on every profile
+	transformProfilesFunc: x => x, 
+
+	//generate a summary of the source project?
+	shouldGenerateSummary: true, 
+
+	//copy events from source to target?
+	shouldCopyEvents: false, 
+
+	//copy schema (lexicon) from source to target?
+	shouldCopySchema: false, 
+
+	//copy user profiles from source to target?
+	shouldCopyProfiles: false, 
+
+	//copy saved entities from source to target?
+	shouldCopyEntities: false, 
+	
+	//if true, will not print console messages
+	silent: false, 
+
+	//if true, will skip the confirmation prompt... use at own risk!
+	skipPrompt: false 
 }
 
 const migrateProjects = await projectCopy(source, target, options)
 ```
-specifying all of these options upfront will skip the user prompts.
-
-
 
 ### deleting entities <div id="delete"></div>
 
@@ -186,6 +192,7 @@ const { entityDelete } =  require('mp-migrate')
 let target = {
 	acct: `{{ service acct }}`,
 	pass: `{{ service secret }}`,
+	bearer: `{{ bearer token }}`
 	project: 12345,
 	region: `US`
 }

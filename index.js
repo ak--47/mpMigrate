@@ -67,7 +67,7 @@ async function main(source, target, opts, isCli = false) {
 		acct: "",
 		pass: "",
 		bearer: "",
-		project: 1234,
+		project: 0,
 		start: dayjs().format(dateFormat),
 		end: dayjs().format(dateFormat),
 		region: `US`,
@@ -78,7 +78,7 @@ async function main(source, target, opts, isCli = false) {
 		acct: "",
 		pass: "",
 		bearer: "",
-		project: 1234,
+		project: 0,
 		region: `US`
 	});
 	// @ts-ignore
