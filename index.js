@@ -6,113 +6,135 @@
 // https://github.com/ak--47/mpMigrate
 // 
 
+
 /*
--------
-TODOS:
-	allow specifiying of dash, cohort, custom prop/event ids in source
-	dashboard filters with custom props
-	custom events with custom props
--------
+----
+! MODULES
+----
 */
 
-require('dotenv').config();
 const u = require('./utils.js');
 const del = require('./deleteEntities.js');
-let logs = ``;
+const walkthrough = require('./cli.js');
+const path = require('path');
+const types = require('./types.js');
+
+
+/*
+----
+! TOOLS
+----
+*/
+
+
 const dayjs = require('dayjs');
-const dateFormat = `YYYY-MM-DD`;
-const deep = require('deep-object-diff');
+
 const ak = require('ak-tools');
 const track = ak.tracker('mp-migrate');
 const runId = ak.uid(32);
-global.runId = runId;
 
-async function main(
-	source = {
+
+/*
+----
+! GLOBALS
+----
+*/
+
+let logs = ``;
+const dateFormat = `YYYY-MM-DD`;
+global.runId = runId;
+global.dateFormat = dateFormat;
+
+
+
+/**
+ * mpMigrate!
+ * @example
+ * const { projectCopy } = require('mp-migrate')
+ * const migration = await projectCopy(source, target, options)
+ * @param {types.Source} source `{acct, pass, bearer, project, region, start, end, dash_id[]}`
+ * @param {types.Target} target `{acct, pass, bearer, project, region}`
+ * @param {types.Options} opts `{shouldGenerateSummary, shouldCopyEntities, shouldCopyEvents, shouldCopyProfiles, shouldCopySchema, silent, skipPrompt}`
+ * @returns {Promise<types.Summary>}
+ */
+async function main(source, target, opts, isCli = false) {
+	// * logs
+	global.SILENT = opts.silent || false;
+
+	// * defaults
+	// @ts-ignore
+	source = ak.objDefault(source, {
 		acct: "",
 		pass: "",
-		project: 1234,
+		bearer: "",
+		project: 0,
 		start: dayjs().format(dateFormat),
 		end: dayjs().format(dateFormat),
 		region: `US`,
 		dash_id: []
-	},
-	target = {
+	});
+	// @ts-ignore
+	target = ak.objDefault(target, {
 		acct: "",
 		pass: "",
-		project: 1234,
+		bearer: "",
+		project: 0,
 		region: `US`
-	},
-	opts = {
+	});
+	// @ts-ignore
+	opts = ak.objDefault(opts, {
 		transformEventsFunc: x => x,
 		transformProfilesFunc: x => x,
-		shouldGenerateSummary: null,
-		shouldCopyEvents: null,
-		shouldCopyProfiles: null,
-		shouldCopyEntities: null,
+		shouldGenerateSummary: true,
+		shouldCopyEvents: false,
+		shouldCopyProfiles: false,
+		shouldCopyEntities: false,
+		shouldCopySchema: false,
 		silent: false,
 		skipPrompt: false,
-	}) {
+	});
 
-	global.SILENT = opts.silent || false;
-
-	/*
-	-------
-	WELCOME
-	-------
-	*/
-
-	log(`WELCOME TO THE GREAT MIXPANEL PROJECT MIGRATOR
-		(by AK) v1.08
-
-this script can COPY data (events + users) as well as saved entities (dashboard, reports, schemas, cohorts, custom event/props) from one project to another`);
-	const { envCredsSource, envCredsTarget } = u.getEnvCreds();
-
-	//choose creds based on .env or params
-	if (source.acct === '' && source.pass === '') {
+	// * .env
+	if (!isCli && !(source.acct || source.pass) || !source.bearer) {
+		const { envCredsSource, envCredsTarget } = walkthrough.getEnvCreds();
 		source = envCredsSource;
-		log(`attempting to use .env for source credentials`);
-	}
-
-	if (target.acct === '' && target.pass === '') {
 		target = envCredsTarget;
-		log(`attempting to use .env for target credentials`);
 	}
 
-	if (isNotSet(source.acct) || isNotSet(source.pass)) {
-		log(`	⚠️ ERROR: you did not specify service account credentials for your source project ⚠️`);
+	// * validate source
+	if ((isNotSet(source.acct) && isNotSet(source.pass)) && isNotSet(source.bearer)) {
+		log(`	⚠️ ERROR: you did not specify service account or bearer token for your SOURCE project ⚠️`);
 		log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`);
 		process.exit(0);
 	}
 
-	//options
-	let generateSummary, copyEvents, copyProfiles, copyEntities;
-	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities } = opts;
-	const { dash_id } = source;
+	buildAuth(source);
+	let { dash_id } = source;
+	if (!dash_id) dash_id = [];
 
-	//PROMPT USER FOR OPTIONS (if not specified)
-	if (isNotSet(shouldGenerateSummary) || isNotSet(shouldCopyEvents) || isNotSet(shouldCopyProfiles) || isNotSet(shouldCopyEntities)) {
-		log(`first... i need to ask you a few questions...`);
-		({ generateSummary, copyEvents, copyProfiles, copyEntities } = await u.userPrompt(source, target));
-	} else {
-		generateSummary = shouldGenerateSummary;
-		copyEvents = shouldCopyEvents;
-		copyProfiles = shouldCopyProfiles;
-		copyEntities = shouldCopyEntities;
+	const { transformEventsFunc, transformProfilesFunc, shouldGenerateSummary, shouldCopyEvents, shouldCopyProfiles, shouldCopyEntities, shouldCopySchema, silent, skipPrompt } = opts;
+
+	// * validate target
+	if (shouldCopyEntities || shouldCopyProfiles || shouldCopyEvents || shouldCopySchema) {
+		if ((isNotSet(target.acct) && isNotSet(target.pass)) && isNotSet(target.bearer)) {
+			log(`	⚠️ ERROR: you did not specify service account or bearer token for your TARGET project ⚠️`);
+			log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`);
+			process.exit(0);
+		}
 	}
-
+	buildAuth(target);
 	time('migrate', 'start');
 	track('start', { runId, ...opts });
 
 	/*
 	-------
-	FETCH SOURCE
+	! FETCH SOURCE
 	-------
 	*/
 
 	//SOURCE
 	//validate service account & get workspace id
-	log(`validating source service account...`, null, true);
+	log(`validating credentials...`, null, true);
 	let sourceWorkspace = await u.validateServiceAccount(source);
 	source.workspace = sourceWorkspace.id;
 	let dataFolder = await u.makeProjectFolder(sourceWorkspace);
@@ -123,20 +145,20 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 	let numEvents, numProfiles, sourceSchema, sourceCustEvents, sourceCustProps, sourceCohorts, sourceDashes, sourceFoundReports, sourceFoundMedia, sourceFoundText, sourceEmptyDashes;
 
 	// get all events
-	if (copyEvents || generateSummary) {
+	if (shouldCopyEvents || shouldGenerateSummary) {
 		log(`querying project for events since ${source.start} to ${source.end}`, null, true);
 		numEvents = await u.getProjCount(source, `events`);
 		log(`	... 👍 found ${u.comma(numEvents)} events`);
 	}
 
 	// get all users
-	if (copyProfiles || generateSummary) {
+	if (shouldCopyProfiles || shouldGenerateSummary) {
 		log(`querying project for users`, null, true);
 		numProfiles = await u.getProjCount(source, `profiles`);
 		log(`	... 👍 found ${u.comma(numProfiles)} users`);
 	}
 
-	if (generateSummary || copyEntities) {
+	if (shouldGenerateSummary || shouldCopyEntities) {
 		//get the events schema
 		log(`fetching schema for project: ${source.project}...`, null, true);
 		sourceSchema = await u.getSchema(source);
@@ -209,7 +231,7 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			log(`	... found 0 empty dashboards`);
 		}
 
-		if (source.dash_id.length > 0) {
+		if (source.dash_id?.length > 0) {
 			log(`filtering for SPECIFIC dashboards: ${source.dash_id.join(", ")}`, null, true);
 			sourceDashes = sourceDashes.filter((dash) => {
 				return source.dash_id.some((specifiedId) => {
@@ -220,8 +242,8 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 			const dependentReports = sourceDashes.map(dash => dash.REPORTS).map(dash => Object.values(dash)).flat().map(report => report.params).map(JSON.stringify);
 			const dependentCohorts = sourceCohorts.map(cohort => cohort.id).filter(cohortId => dependentReports.some(reportString => reportString.includes(cohortId)));
 			const dependentCustEvents = sourceCustEvents.map(custEvent => custEvent.id).filter(custEventId => dependentReports.some(reportString => reportString.includes(custEventId)));
-			const depedentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
-			log(`\t... 👍 found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${depedentCustProps.length} custom prop(s)\n\twhich the dashboard(s) depend on`);
+			const dependentCustProps = sourceCustProps.map(custProp => custProp.customPropertyId).filter(custPropId => dependentReports.some(reportString => reportString.includes(custPropId)));
+			log(`\t... 👍 found ${dependentCohorts.length} cohort(s), ${dependentCustEvents.length} custom event(s), & ${dependentCustProps.length} custom prop(s)\n\twhich the dashboard(s) depend on`);
 			sourceCohorts = sourceCohorts.filter((cohort) => {
 				return dependentCohorts.some(cohortId => cohortId === cohort.id);
 			});
@@ -229,37 +251,34 @@ this script can COPY data (events + users) as well as saved entities (dashboard,
 				return dependentCustEvents.some(custEvId => custEvId === custEvent.id);
 			});
 			sourceCustProps = sourceCustProps.filter((custProp) => {
-				return depedentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
+				return dependentCustProps.some(custPropId => custPropId === custProp.customPropertyId);
 			});
-
 		}
-
-
 	}
 
-	if (generateSummary) {
+	if (shouldGenerateSummary) {
 		log(`stashing entity metadata in ${dataFolder}`, null, true);
 		await u.saveLocalSummary({ sourceSchema, customEvents: sourceCustEvents, customProps: sourceCustProps, sourceCohorts, sourceDashes, sourceWorkspace, source, numEvents, numProfiles });
 		log(`	... 👍 done`);
 	}
 
-	if (!copyEvents && !copyProfiles && !copyEntities) {
+	if (!shouldCopyEvents && !shouldCopyProfiles && !shouldCopyEntities) {
 		log(`nothing else to do... quitting`);
 		process.exit(0);
 	}
 
 	let intentString = ``;
 
-	if (copyEvents) {
+	if (shouldCopyEvents) {
 		intentString += `${u.comma(numEvents)} events\n`;
 	}
 
-	if (copyProfiles) {
+	if (shouldCopyProfiles) {
 		intentString += `${u.comma(numProfiles)} user profiles\n`;
 	}
-	//todo don't copy schema for dash_id
-	if (copyEntities) {
-		if (dash_id.length === 0) {
+	
+	if (shouldCopyEntities) {
+		if (dash_id.length === 0 && shouldCopySchema) {
 			intentString += `${u.comma(sourceSchema.length)} events & props schema\n`;
 		}
 		intentString += `${u.comma(sourceCustEvents.length)} custom event(s)
@@ -281,28 +300,26 @@ ${intentString}
 from project: ${source.project} to project: ${target.project}	
 
 `);
-	let shouldContinue = opts.skipPrompt ? true : await u.userPrompt(null, null, true);
-
-	if (!shouldContinue) {
-		log(`aborting...`);
-		process.exit(0);
+	if (!skipPrompt) {
+		await u.continuePrompt();
 	}
 
-	if (!target.acct || !target.pass || !target.project) {
+
+	if (!target.auth || !target.project) {
 		log(`no target project specified, exiting...`);
 		process.exit(0);
 	}
 
 	/*
 	-------
-	WRITE TO TARGET
+	! WRITE TO TARGET
 	-------
 	*/
 
 	log(`\nPROCEEDING WITH COPY!\n`);
 
 	//TARGET
-	log(`validating target service account...`, null, true);
+	log(`validating target credentials...`, null, true);
 	let targetWorkspace = await u.validateServiceAccount(target);
 	target.workspace = targetWorkspace.id;
 	target = { ...targetWorkspace, ...target };
@@ -310,50 +327,51 @@ from project: ${source.project} to project: ${target.project}
 
 	let sourceExportEvents, targetImportEvents, sourceExportProfiles, targetImportProfiles, targetSchema, targetCustEvents, targetCustProps, targetCohorts, targetDashes;
 
-	if (copyEvents) {
+	if (shouldCopyEvents) {
 		log(`downloading ${u.comma(numEvents)} events...`, null, true);
 		try {
 			sourceExportEvents = await u.exportAllEvents(source);
 			targetImportEvents = await u.sendEvents(source, target, transformEventsFunc);
-			log(`sent ${u.comma(targetImportEvents.results.totalRecordCount)} events in ${u.comma(targetImportEvents.results.totalReqs)} requests; writing logfile...`);
-			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents.responses, null, 2));
+			log(`sent ${u.comma(targetImportEvents.success)} events in ${u.comma(targetImportEvents.batches)} requests; writing log file...`);
+			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents, null, 2));
 		} catch (e) {
 			track('error', { type: "events", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
 
-	if (copyProfiles) {
+	if (shouldCopyProfiles) {
 		log(`downloading ${u.comma(numProfiles)} profiles...`, null, true);
 
 		try {
 			sourceExportProfiles = await u.exportAllProfiles(source, target);
 			targetImportProfiles = await u.sendProfiles(source, target, transformProfilesFunc);
-			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing logfile...`);
+			log(`sent ${u.comma(numProfiles)} requests in ${u.comma(targetImportProfiles.responses.length)} requests; writing log file...`);
 			await u.writeFile(`${dataFolder}/profileLog.json`, JSON.stringify(targetImportProfiles.responses, null, 2));
 		} catch (e) {
 			track('error', { type: "profiles", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
 
-	if (copyEntities) {
-		if (dash_id.length === 0) {
-			try {
-				log(`uploading existing lexicon schema to new project...`, null, true);
-				targetSchema = await u.postSchema(target, sourceSchema);
-				log(`	... 👍 done`);
-			}
-
-			catch (e) {
-				log(`	... ⛔️ failed to upload schema`);
-				track('error', { type: "schema", runId, ...opts });
-				debugger;
-			}
+	if (shouldCopySchema) {
+		try {
+			log(`uploading existing lexicon schema to new project...`, null, true);
+			targetSchema = await u.postSchema(target, sourceSchema);
+			log(`	... 👍 done`);
 		}
 
+		catch (e) {
+			log(`	... ⛔️ failed to upload schema`);
+			track('error', { type: "schema", runId, ...opts });
+			//debugger;
+		}
+
+	}
+
+	if (shouldCopyEntities) {
 		try {
 			log(`creating ${sourceCustEvents.length} custom event(s) + ${sourceCustProps.length} custom prop(s)...`, null, true);
 			if (sourceCustProps.length > 0) targetCustProps = await u.makeCustomProps(target, sourceCustProps);
@@ -363,7 +381,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create custom events + props`);
 			track('error', { type: "custom events", runId, ...opts });
-			debugger;
+			//debugger;
 
 		}
 
@@ -375,7 +393,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create cohorts`);
 			track('error', { type: "cohorts", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 		try {
@@ -386,7 +404,7 @@ from project: ${source.project} to project: ${target.project}
 		catch (e) {
 			log(`	... ⛔️ failed to create dashboards`);
 			track('error', { type: "dashboards", runId, ...opts });
-			debugger;
+			//debugger;
 		}
 
 	}
@@ -412,7 +430,8 @@ from project: ${source.project} to project: ${target.project}
 		sourceExportEvents,
 		sourceExportProfiles,
 		targetImportEvents,
-		targetImportProfiles
+		targetImportProfiles,
+		logs: path.resolve(dataFolder)
 	};
 
 	log(`all finished... thank you for playing the game`);
@@ -433,6 +452,7 @@ UTILS
 */
 
 function log(message, data, hasResponse = false) {
+	// @ts-ignore
 	if (SILENT) {
 		return;
 	}
@@ -462,6 +482,27 @@ function time(label = `foo`, directive = `start`) {
 
 }
 
+/**
+ * 
+ * @param {types.Source | types.Target} p 
+ */
+function buildAuth(p) {
+	if (p.bearer) {
+		p.auth = `Bearer ${p.bearer}`;
+		return;
+	}
+
+	if (p.acct && p.pass) {
+		p.auth = `Basic ${Buffer.from(p.acct + ":" + p.pass).toString('base64')}`;
+		return;
+	}
+
+	console.error(`no bearer or service account for project ${p.project}`);
+	throw Error('a bearer token token or service account is required!');
+
+}
+
+
 function isNotSet(val) {
 	return val === undefined || val === null;
 }
@@ -473,7 +514,11 @@ module.exports = {
 
 //this allows the module to function as a standalone script
 if (require.main === module) {
-	main().then((result) => {
+	walkthrough.cli().then(answers => {
+		const { source, target, options } = answers;
+		return main(source, target, options, true);
+	}).then((result) => {
+		debugger;
 		// process.exit(0);
 	});
 

@@ -3,5 +3,18 @@
 	"jest.autoRun": "off",
 	"files.exclude": {
 		"**/node_modules": true
-	}
+	},
+	"js/ts.implicitProjectConfig.checkJs": true,
+	"cSpell.words": [
+		"Creds",
+		"Cust",
+		"dfns",
+		"letsgo",
+		"ndjson",
+		"nocheck",
+		"Reqs",
+		"tldr",
+		"TODOS",
+		"walkthrough"
+	]
 }

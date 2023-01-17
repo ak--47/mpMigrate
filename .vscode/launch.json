@@ -1,0 +1,16 @@
+{
+	"configurations": [
+		{
+            "type": "node",
+            "request": "launch",
+            "name": "CLI",
+			"runtimeExecutable": "${workspaceFolder}/node_modules/nodemon/bin/nodemon.js",
+            "console": "integratedTerminal", // <= the relevant part
+            "program": "${workspaceFolder}/index.js",
+			"runtimeArgs": ["--inspect", "-I", "--ignore", "${workspaceFolder}/savedProjects/"],
+			"env": {
+				"MODE": "cli"
+			}
+        }
+	]
+}

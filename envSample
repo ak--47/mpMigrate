@@ -1,14 +1,25 @@
 # this file should be called .env and be in the SAME DIRECTORY that you are running mp-migrate in
 
-SOURCE_ACCT = '' 		#REQ: the service account of your SOURCE project
-SOURCE_PASS = '' 		#REQ: the service account secret of your SOURCE project
-SOURCE_PROJECT = '' 	#REQ: the SOURCE project id
-SOURCE_DATE_START = '' 	#optional: if copying events - when to start MM-DD-YYYY
-SOURCE_DATE_END = ''	#optional: if copying events - when to end MM-DD-YYYY
-SOURCE_REGION = '' 		#optional: if US... mandatory if 'EU'
-SOURCE_DASH_ID = '' 	#optional: a dashboard id (or comma sep list of dashIds) to copy ONLY a single dashboard
+# SOURCE INFOS
+# note: either the acct/pass OR bearer token is required; not both
+SOURCE_ACCT = '' 		#the service account of your SOURCE project
+SOURCE_PASS = '' 		#the service account secret of your SOURCE project
+SOURCE_BEARER = ''		#the bearer token of the user who has access to the source project
+SOURCE_PROJECT = '' 	#the SOURCE project id
 
-TARGET_ACCT = '' 		#REQ: the service account of your TARGET project
-TARGET_PASS = '' 		#REQ: the service account secret of your TARGET project
-TARGET_PROJECT = ''		#REQ: the TARGET project id
-TARGET_REGION = ''		#optional: if US... mandatory if 'EU'
+#OPTIONAL FIELDS
+SOURCE_DATE_START = '' 	#if copying events - when to start MM-DD-YYYY
+SOURCE_DATE_END = ''	#if copying events - when to end MM-DD-YYYY
+SOURCE_REGION = '' 		#if US... mandatory if 'EU'
+SOURCE_DASH_ID = '' 	#a dashboard id (or comma sep list of dashIds) to copy ONLY a single dashboard
+
+# TARGET INFOS
+
+# note: either the acct/pass OR bearer token is required; not both
+TARGET_ACCT = '' 		#the service account of your TARGET project
+TARGET_PASS = '' 		#the service account secret of your TARGET project
+TARGET_BEARER = ''		#the bearer token of the user who has access to the target project
+TARGET_PROJECT = ''		#the TARGET project id
+
+#OPTIONAL FIELDS
+TARGET_REGION = ''		#if US... mandatory if 'EU'

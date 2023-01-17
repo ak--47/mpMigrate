@@ -5,19 +5,24 @@ const FormData = require('form-data');
 const fs = require('fs').promises;
 const { createWriteStream } = require('fs');
 const makeDir = require('fs').mkdirSync;
-const { pick } = require('underscore');
 const dayjs = require('dayjs');
 const path = require('path');
 const dateFormat = `YYYY-MM-DD`;
+// @ts-ignore
 const mpImport = require('mixpanel-import');
-const prompt = require('prompt');
 const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
+// @ts-ignore
 const u = require('ak-tools');
 const track = u.tracker('mp-migrate');
+const inquirer = require('inquirer');
+const { spawn } = require('child_process');
+// @ts-ignore
+const types = require('./types')
 
 // retries on 503: https://stackoverflow.com/a/64076585
 // TODO on 500, just change the report name
+// @ts-ignore
 axiosRetry(fetch, {
 	retries: 3, // number of retries
 	retryDelay: (retryCount) => {
@@ -28,17 +33,19 @@ axiosRetry(fetch, {
 		// if retry condition is not specified, by default idempotent requests are retried
 		return error.response.status === 503 || error.response.status === 409;
 	},
+	// @ts-ignore
 	onRetry: function (retryCount, error, requestConfig) {
 		if (error.response.status === 409) {
-		const oldEntity = JSON.parse(requestConfig.data);
-		oldEntity.name += `copy`;
-		const newEntity = JSON.stringify(oldEntity);
-		requestConfig.data = newEntity;
-		return requestConfig;
+			const oldEntity = JSON.parse(requestConfig.data);
+			oldEntity.name += `copy`;
+			const newEntity = JSON.stringify(oldEntity);
+			requestConfig.data = newEntity;
+			return requestConfig;
 		}
 		else {
-			track('error', {runId, ...requestConfig.data})
-			console.log('something is broken; please let AK know...')
+			// @ts-ignore
+			track('error', { runId, ...requestConfig.data });
+			console.log('something is broken; please let AK know...');
 		}
 	}
 }
@@ -50,63 +57,10 @@ AUTH + STORAGE
 --------------
 */
 
-exports.getEnvCreds = function () {
-	//sweep .env to pickup creds
-	const envVarsSource = pick(process.env, `SOURCE_ACCT`, `SOURCE_PASS`, `SOURCE_PROJECT`, `SOURCE_DATE_START`, `SOURCE_DATE_END`, `SOURCE_REGION`, `SOURCE_DASH_ID`);
-	const envVarsTarget = pick(process.env, `TARGET_ACCT`, `TARGET_PASS`, `TARGET_PROJECT`, `TARGET_REGION`);
-	const sourceKeyNames = { SOURCE_ACCT: "acct", SOURCE_PASS: "pass", SOURCE_PROJECT: "project", SOURCE_DATE_START: "start", SOURCE_DATE_END: "end", SOURCE_REGION: "region", SOURCE_DASH_ID: "dash_id" };
-	const targetKeyNames = { TARGET_ACCT: "acct", TARGET_PASS: "pass", TARGET_PROJECT: "project", TARGET_REGION: "region" };
-	const envCredsSource = renameKeys(envVarsSource, sourceKeyNames);
-	const envCredsTarget = renameKeys(envVarsTarget, targetKeyNames);
-
-	if (dayjs(envCredsSource.start).isValid()) {
-		envCredsSource.start = dayjs(envCredsSource.start).format(dateFormat);
-	}
-
-	else {
-		envCredsSource.start = dayjs().format(dateFormat);
-	}
-
-	if (dayjs(envCredsSource.end).isValid()) {
-		envCredsSource.end = dayjs(envCredsSource.end).format(dateFormat);
-	}
-
-	else {
-		envCredsSource.end = dayjs().format(dateFormat);
-	}
-
-	// region defaults
-	if (!envCredsSource.region) envCredsSource.region = `US`;
-	if (!envCredsTarget.region) envCredsTarget.region = `US`;
-
-	// dash_ids
-	if (envCredsSource.dash_id) {
-		envCredsSource.dash_id = envCredsSource.dash_id.split(",").map(a => Number(a.trim()));
-		let dashIdsValid = envCredsSource.dash_id.every((dashId) => u.is(Number, dashId) && !isNaN(dashId));
-		if (!dashIdsValid) {
-			console.log(`ERROR: your source_dash_id needs to be a number (or a comma separated list of numbers) got:`);
-			console.log(envCredsSource.dash_id.join('\t\n'));
-			console.log('\ndouble check your .env and try again');
-			process.exit(1);
-		}
-
-	}
-
-	else {
-		envCredsSource.dash_id = []
-	}
-
-	return {
-		envCredsSource,
-		envCredsTarget
-	};
-
-};
-
 exports.validateServiceAccount = async function (creds) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 	let res = (await fetch(URLs.me(region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -120,7 +74,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: access`;
 	} else {
 		`fail: access`;
-		console.error(`user: ${username} does not have access to project: ${project}\ndouble check your credentials and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} does not have access to project: ${project}\ndouble check your credentials and try again`);
 		process.exit(1);
 
 	}
@@ -131,7 +85,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: permissions`;
 	} else {
 		`fail: permissions`;
-		console.error(`user: ${username} has ${perms} to project ${project}\nthis script requires accounts to have 'admin' or 'ower' permissions\nupdate your permissions and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} has ${perms} to project ${project}\nthis script requires accounts to have 'admin' or 'owner' permissions\nupdate your permissions and try again`);
 		process.exit(1);
 
 	}
@@ -148,7 +102,7 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: global access`;
 	} else {
 		`fail: global access`;
-		console.error(`user: ${username} does not have access to a global data view in ${project}\nthis script requires accounts to have access to a global data view\nupdate your permissions and try again`);
+		console.error(`user: ${creds.acct || creds.bearer} does not have access to a global data view in ${project}\nthis script requires accounts to have access to a global data view\nupdate your permissions and try again`);
 		process.exit(1);
 	}
 
@@ -158,7 +112,7 @@ exports.validateServiceAccount = async function (creds) {
 
 	// get project metadata
 	let metaData = (await fetch(URLs.getMetaData(project, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -167,9 +121,9 @@ exports.validateServiceAccount = async function (creds) {
 		process.exit(1);
 	})).data.results;
 
-	globalView[0].api_key = metaData.api_key;
-	globalView[0].secret = metaData.secret;
-	globalView[0].token = metaData.token;
+	globalView[0].api_key = metaData?.api_key;
+	globalView[0].secret = metaData?.secret;
+	globalView[0].token = metaData?.token;
 
 	return globalView[0];
 };
@@ -225,136 +179,26 @@ USER PROMPTS
 ------------
 */
 
-exports.userPrompt = async function (source, target, shouldContinue) {
-	//user input
-	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
-	const defaults = {
-		pattern: yesNoRegex,
-		type: 'string',
-		required: true,
-		message: 'please say "yes" or "no", or "y", or "n"',
-		default: 'no',
-		before: function (value) { return value?.toLowerCase(); }
-	};
+exports.continuePrompt = async function () {
+	const ask = inquirer.createPromptModule();
+	const should = await ask([{
+		type: "confirm",
+		message: `are you SURE you want to continue?`,
+		name: "continue",
+		default: true
+	}]);
 
-	if (shouldContinue) {
-		const continueSchema = {
-			properties: {
-				shouldContinue: {
-					description: `are you sure you want to continue?`,
-					...defaults
-				}
-			}
-		};
-
-		continueSchema.properties.shouldContinue.default = 'yes';
-
-		prompt.start();
-		prompt.message = ``;
-		let { shouldContinue } = await prompt.get(continueSchema);
-
-		if (shouldContinue.includes('y')) {
-			return true;
-		} else {
-			return false;
-		}
-
-
+	if (!should.continue) {
+		log(`aborting...`);
+		process.exit(0);
 	}
 
-	const promptSchema = {
-		properties: {
-			generateSummary: {
-				description: `do you want to generate a TEXT SUMMARY of project ${source.project}'s saved entities?`,
-				...defaults
-			},
-			copyEvents: {
-				description: `do you want to COPY EVENTS from project ${source.project} to project ${target.project}?`,
-				...defaults
-			},
-			copyProfiles: {
-				description: `do you want to COPY PROFILES from project ${source.project} to project ${target.project}?`,
-				...defaults
-			},
-			copyEntities: {
-				description: `do you want to COPY SAVED ENTITIES from project ${source.project} to project ${target.project}?${source.dash_id.length > 0 ? `\n\tNOTE: you have specified ${source.dash_id.length} dashboard(s) to copy...` : ""}`,
-				...defaults
-			}
-		}
-	};
-	prompt.start();
-	prompt.message = ``;
-	let { generateSummary, copyEvents, copyProfiles, copyEntities } = await prompt.get(promptSchema);
-
-	if (generateSummary.includes('y')) {
-		generateSummary = true;
-	} else {
-		generateSummary = false;
+	else {
+		log(`continuing...`)
+		return true
 	}
-
-	if (copyEvents.includes('y')) {
-		copyEvents = true;
-	} else {
-		copyEvents = false;
-	}
-
-	if (copyProfiles.includes('y')) {
-		copyProfiles = true;
-	} else {
-		copyProfiles = false;
-	}
-
-	if (copyEntities.includes('y')) {
-		copyEntities = true;
-	} else {
-		copyEntities = false;
-	}
-
-	console.log(``);
-
-	return {
-		generateSummary,
-		copyEvents,
-		copyProfiles,
-		copyEntities
-	};
 };
 
-async function failPrompt() {
-	const yesNoRegex = /^(?:Yes|No|yes|no|y|n|Y|N)$/;
-	const defaults = {
-		pattern: yesNoRegex,
-		type: 'string',
-		required: true,
-		message: 'please say "yes" or "no", or "y", or "n"',
-		default: 'no',
-		before: function (value) { return value?.toLowerCase(); }
-	};
-
-
-	const continueSchema = {
-		properties: {
-			shouldContinue: {
-				description: `do you want to continue?`,
-				...defaults
-			}
-		}
-	};
-
-	continueSchema.properties.shouldContinue.default = 'yes';
-
-	prompt.start();
-	prompt.message = ``;
-	let { shouldContinue } = await prompt.get(continueSchema);
-
-	if (shouldContinue.includes('y')) {
-		console.log('...continuing\n');
-		return true;
-	} else {
-		log('...quitting\n');
-		return false;
-	}
-}
 
 /*
 -------
@@ -363,64 +207,49 @@ GETTERS
 */
 
 exports.getCohorts = async function (creds) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getCohorts(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING COHORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data;
 
 	return res.results;
 };
 
 exports.getAllDash = async function (creds) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getAllDash(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		console.error(`ERROR GETTING DASH`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
+	// @ts-ignore
 	})).data;
 
 	return res.results;
 };
 
 exports.getDashReports = async function (creds, dashId) {
-	let { acct: username, pass: password, workspace, region } = creds;
+	let { auth, workspace, region } = creds;
 	let res = (await fetch(URLs.getSingleDash(workspace, dashId, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		console.error(`ERROR GETTING REPORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: { contents: { report: [] } } } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
+	// @ts-ignore
 	})).data?.results;
 
 	const dashSummary = {
@@ -436,22 +265,17 @@ exports.getDashReports = async function (creds, dashId) {
 };
 
 exports.getSchema = async function (creds) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 	let res = (await fetch(URLs.getSchemas(project, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -459,9 +283,10 @@ exports.getSchema = async function (creds) {
 };
 
 exports.getCustomEvents = async function (creds) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	// @ts-ignore
+	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomEvents(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch((e) => {
 		creds;
 		debugger;
@@ -474,22 +299,18 @@ exports.getCustomEvents = async function (creds) {
 };
 
 exports.getCustomProps = async function (creds) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	// @ts-ignore
+	let { auth, project, workspace, region } = creds;
 	let res = (await fetch(URLs.getCustomProps(workspace, region), {
-		auth: { username, password }
+		headers: { Authorization: auth }
 	}).catch(async (e) => {
 		creds;
 		debugger;
 		console.error(`ERROR GETTING CUSTOM PROPS!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 
+	// @ts-ignore
 	})).data.results;
 
 	return res;
@@ -503,7 +324,7 @@ SETTERS
 */
 
 exports.postSchema = async function (creds, schema) {
-	let { acct: username, pass: password, project, region } = creds;
+	let { auth, project, region } = creds;
 
 	schema = schema.filter(e => !e.entityType.includes('custom'));
 
@@ -520,29 +341,25 @@ exports.postSchema = async function (creds, schema) {
 	let params = { entries: schema, ...extraParams };
 	let res = await fetch(URLs.postSchema(project, region), {
 		method: `post`,
-		auth: { username, password },
+		headers: { Authorization: auth },
 		data: params
 
 	}).catch(async (e) => {
 		params;
 		console.error(`ERROR POSTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		let shouldContinue = await failPrompt();
-		if (shouldContinue) {
-			return { data: { results: [] } };
-		}
-		else {
-			process.exit(1);
-		}
+		return await exports.continuePrompt
 	});
 
+	// @ts-ignore
 	return res.data.results;
 };
 
 
+// @ts-ignore
 exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], sourceCustEvents = [], sourceCustProps = [], targetCustEvents = [], targetCustProps = []) {
 	//TODO DEAL WITH CUSTOM PROPS + CUSTOM EVENTS in COHORT dfns
-	let { acct: username, pass: password, workspace, project, region } = targetCreds;
+	let { auth, workspace, project, region } = targetCreds;
 	let results = [];
 
 	// //match old and new custom entities
@@ -557,7 +374,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 
 		let createdCohort = await fetch(URLs.makeCohorts(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: cohort
 
 		}).catch((e) => {
@@ -569,15 +386,19 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 			return {};
 		});
 
+		// @ts-ignore
 		results.push(createdCohort?.data?.results);
 
 		if (failed) {
 			continue createCohorts;
 		} else {
+			// @ts-ignore
 			await fetch(URLs.shareCohort(project, createdCohort.data.results.id), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
+				// @ts-ignore
 				data: { "id": createdCohort.data.results.id, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -588,7 +409,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 };
 
 exports.makeCustomProps = async function (creds, custProps) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let results = [];
 	let customProperties = clone(custProps);
 	loopCustomProps: for (const custProp of customProperties) {
@@ -609,7 +430,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 		//make the dashboard; get back id
 		let createdCustProp = await fetch(URLs.createCustomProp(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: custProp
 
 		}).catch((e) => {
@@ -622,6 +443,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 			return {};
 
 		});
+		// @ts-ignore
 		let customProp = createdCustProp?.data?.results;
 		results.push(customProp);
 		if (failed) {
@@ -630,8 +452,9 @@ exports.makeCustomProps = async function (creds, custProps) {
 			// share custom event
 			await fetch(URLs.shareCustProp(project, customProp.customPropertyId, region), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
 				data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -642,8 +465,9 @@ exports.makeCustomProps = async function (creds, custProps) {
 };
 
 //TODO DEAL WITH CUSTOM PROPS in CUSTOM EVENT dfns
+// @ts-ignore
 exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = [], targetCustProps = []) {
-	let { acct: username, pass: password, project, workspace, region } = creds;
+	let { auth, project, workspace, region } = creds;
 	let results = [];
 
 	// //match old and new custom entities
@@ -658,11 +482,12 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 		let custPayload = new FormData();
 		custPayload.append('name', name);
 		custPayload.append('alternatives', JSON.stringify(alternatives));
+
 		let headers = custPayload.getHeaders();
+		headers.Authorization = auth;
 
 		let createdCustEvent = await fetch(URLs.createCustomEvent(workspace, region), {
 			method: 'post',
-			auth: { username, password },
 			headers,
 			data: custPayload,
 		}).catch((e) => {
@@ -674,6 +499,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			return {};
 		});
 
+		// @ts-ignore
 		let customEvent = createdCustEvent?.data?.custom_event;
 		results.push(customEvent);
 
@@ -684,8 +510,9 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			// share custom event
 			await fetch(URLs.shareCustEvent(project, customEvent?.id, region), {
 				method: 'post',
-				auth: { username, password },
+				headers: { Authorization: auth },
 				data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
+			// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -697,7 +524,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 
 //TODO DASH FILTERS BREAK STUFF
 exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sourceCustEvents = [], sourceCustProps = [], sourceCohorts = [], targetCustEvents = [], targetCustProps = [], targetCohorts = []) {
-	const { acct: username, pass: password, project, workspace, region } = targetCreds;
+	const { auth, project, workspace, region } = targetCreds;
 	let dashCount = -1;
 	const OGDashes = clone(dashes);
 	const results = {
@@ -715,12 +542,13 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	let targetEntities = { custEvents: targetCustEvents, custProps: targetCustProps, cohorts: targetCohorts };
 	let matchedEntities = await matchCustomEntities(sourceCreds, sourceEntities, targetEntities);
 	let matches = [...matchedEntities.cohorts, ...matchedEntities.custEvents, ...matchedEntities.custProps]
+		// @ts-ignore
 		.map(x => [x.sourceId, x.targetId])
 		.filter(x => Boolean(x[0]) && Boolean(x[1]));
 	let newDashes;
 	for (const pairIds of matches) {
-		const substitue = changeFactory(pairIds[0], pairIds[1]);
-		newDashes = substitue(dashes);
+		const substitute = changeFactory(pairIds[0], pairIds[1]);
+		newDashes = substitute(dashes);
 	}
 
 	if (!newDashes) newDashes = dashes;
@@ -728,10 +556,11 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 	loopDash: for (const dash of newDashes) {
 		let failed = false;
 		dashCount++;
-		//copy all child reports metadatas
+		//copy all child reports metadata
 		const reports = [];
 		const media = [];
 		const text = [];
+		// @ts-ignore
 		const layout = dash.LAYOUT;
 		const reportResults = [];
 		const mediaResults = [];
@@ -747,7 +576,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			text.push(dash.TEXT[textId]);
 		}
 
-		//get rid of disallowed keys (this is backwards; u shuld whitelist)
+		//get rid of disallowed keys (this is backwards; u should whitelist)
 		blacklistKeys.forEach(key => delete dash[key]);
 
 		//get rid of null keys
@@ -768,7 +597,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		//make the dashboard; get back id
 		let createdDash = await fetch(URLs.makeDash(workspace, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: dash
 
 		}).catch((e) => {
@@ -783,6 +612,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			return {};
 
 		});
+		// @ts-ignore
 		results.dashes.push(createdDash?.data?.results);
 
 		if (failed) {
@@ -792,16 +622,20 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		const oldDashLayout = OGDashes[dashCount].LAYOUT;
 
 		//use new dash id to make reports
+		// @ts-ignore
 		const dashId = createdDash.data.results.id;
 		targetCreds.dashId = dashId;
 		const createdReports = await makeReports(targetCreds, reports, targetCustEvents, targetCustProps, targetCohorts, oldDashLayout);
 		const createdMedia = await makeMedia(targetCreds, media, oldDashLayout);
 		const createdText = await makeText(targetCreds, text, oldDashLayout);
 		//ack ... refactor this junk
+		// @ts-ignore
 		results.reports.push(createdReports);
 		reportResults.push(createdReports);
+		// @ts-ignore
 		results.media.push(createdMedia);
 		mediaResults.push(createdMedia);
+		// @ts-ignore
 		results.text.push(createdText);
 		textResults.push(createdText);
 
@@ -809,7 +643,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 		let sharePayload = { "id": dashId, "projectShares": [{ "id": project, "canEdit": true }] };
 		let sharedDash = await fetch(URLs.shareDash(project, dashId, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: sharePayload
 		}).catch((e) => {
 			sharePayload;
@@ -818,28 +652,32 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			debugger;
 		});
 
+		// @ts-ignore
 		results.shares.push(sharedDash);
 
 		//pin dashboards
 		let pinnedDash = await fetch(URLs.pinDash(workspace, dashId, region), {
 			method: `post`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: {}
+		// @ts-ignore
 		}).catch((e) => {
 			debugger;
 		});
 
+		// @ts-ignore
 		results.pins.push(pinnedDash);
 
 		// UPDATE LAYOUT
 		const allCreatedEntities = [...reportResults, ...mediaResults, ...textResults].flat();
-		const currentDashId = results.dashes.slice().pop().id;
+		// @ts-ignore
+		const currentDashId = results.dashes.slice().pop()?.id;
 		const mostRecentNewDashLayout = (await exports.getDashReports(targetCreds, currentDashId)).layout;
 		//const mostRecentNewDashLayout = Object.values(results).flat().flat().pop().results.layout;
 		const matchedDashLayout = reconcileLayouts(oldDashLayout, mostRecentNewDashLayout, allCreatedEntities);
 		const layoutUpdate = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: JSON.stringify(matchedDashLayout)
 		}).catch((e) => {
 			matchedDashLayout;
@@ -849,6 +687,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			return {};
 		});
 
+		// @ts-ignore
 		results.layoutUpdates.push(layoutUpdate);
 	}
 
@@ -905,6 +744,7 @@ exports.exportAllProfiles = async function (source, target) {
 		},
 	})).data;
 
+	// @ts-ignore
 	let { page, page_size, session_id, total } = response;
 	let lastNumResults = response.results.length;
 	let profiles = response.results.map(function (person) {
@@ -1155,8 +995,10 @@ exports.sendEvents = async function (source, target, transform) {
 		bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
 		strict: true, //use strict mode?
 		logs: true, //print to stdout?
+		verbose: false,
 		transformFunc: transform
 	};
+	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);
 
 	return importedData;
@@ -1179,6 +1021,7 @@ exports.sendProfiles = async function (source, target, transform) {
 		logs: true, //print to stdout?
 		transformFunc: transform
 	};
+	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);
 
 	return importedData;
@@ -1191,7 +1034,8 @@ REPORT MAKERS
 -------------
 */
 const makeMedia = async function (creds, media = [], oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	// @ts-ignore
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGMedia = clone(media);
 	let mediaCount = -1;
@@ -1202,7 +1046,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 		const mediaCreate = { "content": { "action": "create", "content_type": "media", "content_params": { "media_type": "", "service": "", "path": "" } } };
 		const createMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: mediaCreate
 
 		}).catch((e) => {
@@ -1217,6 +1061,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 		});
 
 		if (failed) continue loopMedia;
+		// @ts-ignore
 		const createdMediaCardId = createMediaCard.data.results.new_content.id;
 
 		//get rid of disallowed keys
@@ -1241,7 +1086,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 
 		let updatedMediaCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
@@ -1256,15 +1101,19 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 
 		if (!failed) {
 			const oldId = OGMedia[mediaCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			updatedMediaCard.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = updatedMediaCard.data.results.layout.rows[updatedMediaCard.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			updatedMediaCard.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1272,6 +1121,7 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 			};
 		}
 
+		// @ts-ignore
 		results.push(updatedMediaCard?.data || updatedMediaCard);
 		if (failed) {
 			continue loopMedia;
@@ -1283,7 +1133,8 @@ const makeMedia = async function (creds, media = [], oldDashLayout) {
 };
 
 const makeText = async function (creds, text = [], oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	// @ts-ignore
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGText = clone(text);
 	let textCount = -1;
@@ -1294,7 +1145,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 		const textCreate = { "content": { "action": "create", "content_type": "text", "content_params": { "markdown": "" } } };
 		const createTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: textCreate
 
 		}).catch((e) => {
@@ -1308,6 +1159,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 		});
 
 		if (failed) continue loopText;
+		// @ts-ignore
 		const createdTextCardId = createTextCard.data.results.new_content.id;
 
 		//get rid of disallowed keys
@@ -1332,12 +1184,12 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 
 		let updatedTextCard = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
 			failed = true;
-			media;
+			text;
 			results;
 			console.error(`ERROR UPDATING MEDIA CARD!`);
 			console.error(`${e.message} : ${e.response.data.error}`);
@@ -1347,15 +1199,19 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 
 		if (!failed) {
 			const oldId = OGText[textCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			updatedTextCard.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = updatedTextCard.data.results.layout.rows[updatedTextCard.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			updatedTextCard.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1363,6 +1219,7 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 			};
 		}
 
+		// @ts-ignore
 		results.push(updatedTextCard?.data || updatedTextCard);
 		if (failed) {
 			continue loopText;
@@ -1372,8 +1229,10 @@ const makeText = async function (creds, text = [], oldDashLayout) {
 	return results;
 };
 
+// @ts-ignore
 const makeReports = async function (creds, reports = [], targetCustEvents, targetCustProps, targetCohorts, oldDashLayout) {
-	let { acct: username, pass: password, project, workspace, dashId, region } = creds;
+	// @ts-ignore
+	let { auth, project, workspace, dashId, region } = creds;
 	let results = [];
 	const OGReport = clone(reports);
 	let reportCount = -1;
@@ -1408,7 +1267,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 		let createdReport = await fetch(URLs.makeReport(workspace, dashId, region), {
 			method: `patch`,
-			auth: { username, password },
+			headers: { Authorization: auth },
 			data: payload
 
 		}).catch((e) => {
@@ -1423,15 +1282,19 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 
 		if (!failed) {
 			const oldId = OGReport[reportCount].id;
+			// @ts-ignore
 			const oldRowId = Object.entries(oldDashLayout.rows).find(rowDfn => { return rowDfn[1].cells.find(cell => cell.content_id === oldId); })[0];
+			// @ts-ignore
 			createdReport.data.oldLayout = {
 				rowNumber: oldDashLayout.order.findIndex(oldRow => oldRow === oldRowId),
 				cellNumber: oldDashLayout.rows[oldRowId].cells.findIndex(cell => cell.content_id === oldId),
 				width: oldDashLayout.rows[oldRowId].cells.find(cell => cell.content_id === oldId).width
 			};
 
+			// @ts-ignore
 			const layout = createdReport.data.results.layout.rows[createdReport.data.results.layout.order.slice(-1).pop()].cells[0];
 
+			// @ts-ignore
 			createdReport.data.newLayout = {
 				content_id: layout.content_id,
 				id: layout.id,
@@ -1439,6 +1302,7 @@ const makeReports = async function (creds, reports = [], targetCustEvents, targe
 			};
 		}
 
+		// @ts-ignore
 		results.push(createdReport?.data || createdReport);
 		if (failed) {
 			continue loopReports;
@@ -1467,8 +1331,10 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 		rows: [] //rows: {}
 	};
 
+	// @ts-ignore
 	const numRows = oldDash.order.length;
 	const newRows = newDash.order.slice();	//slice(0, numRows);
+	// @ts-ignore
 	newLayout.rows_order = [...newRows];
 
 	for (const [index, rowId] of Object.entries(newRows)) {
@@ -1486,6 +1352,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 
 			//carefully place the card with the source layout settings but the target ids
 			for (const card of itemsInRow) {
+				// @ts-ignore
 				rowTemplate.cells.push({
 					//these two keys verify the match but are not required in the payload
 					//content_id: card.ids.content_id,
@@ -1496,6 +1363,7 @@ const reconcileLayouts = function (oldDash, newDash, newDashItems) {
 			}
 		}
 
+		// @ts-ignore
 		newLayout.rows.push(rowTemplate);
 
 	}
@@ -1550,6 +1418,7 @@ const removeNulls = function (obj) {
 	for (var k in obj) {
 		// falsy values
 		if (!Boolean(obj[k])) {
+			// @ts-ignore
 			isArray ? obj.splice(k, 1) : delete obj[k];
 		}
 
@@ -1581,16 +1450,6 @@ const changeFactory = function (sourceId = "", targetId = "") {
 	};
 };
 
-const renameKeys = function (obj, newKeys) {
-	//https://stackoverflow.com/a/45287523
-	const keyValues = Object.keys(obj).map(key => {
-		const newKey = newKeys[key] || key;
-		return {
-			[newKey]: obj[key]
-		};
-	});
-	return Object.assign({}, ...keyValues);
-};
 
 // https://stackoverflow.com/a/41951007
 const clone = function (thing, opts) {
@@ -1650,7 +1509,7 @@ exports.writeFile = async function (filename, data) {
 	await fs.writeFile(filename, data);
 };
 
-const openExplorerinMac = function (path, callback) {
+const openExplorerInMac = function (path, callback) {
 	path = path || '/';
 	let p = spawn('open', [path]);
 	p.on('error', (err) => {
@@ -1687,16 +1546,22 @@ SUMMARY GENERATORS
 exports.saveLocalSummary = async function (projectMetaData) {
 	const { sourceSchema: schema, customEvents, customProps, sourceCohorts: cohorts, sourceDashes: dashes, sourceWorkspace: workspace, source, numEvents, numProfiles } = projectMetaData;
 	const summary = await makeSummary({ schema, customEvents, customProps, cohorts, dashes, workspace, numEvents, numProfiles });
+	// @ts-ignore
 	const writeSummary = await writeFile(path.resolve(`${source.localPath}/fullSummary.txt`), summary);
+	// @ts-ignore
 	const writeSchema = await writeFile(path.resolve(`${source.localPath}/payloads/schema.json`), json(schema));
+	// @ts-ignore
 	const writeCustomEvents = await writeFile(path.resolve(`${source.localPath}/payloads/customEvents.json`), json(customEvents));
+	// @ts-ignore
 	const writeCustomProps = await writeFile(path.resolve(`${source.localPath}/payloads/customProps.json`), json(customProps));
+	// @ts-ignore
 	const writeCohorts = await writeFile(path.resolve(`${source.localPath}/payloads/cohorts.json`), json(cohorts));
+	// @ts-ignore
 	const writeDashes = await writeFile(path.resolve(`${source.localPath}/payloads/dashboards.json`), json(dashes));
 
 	//reveal the folder
 	try {
-		openExplorerinMac(path.resolve(`${source.localPath}`));
+		openExplorerInMac(path.resolve(`${source.localPath}`));
 	}
 
 	catch (e) {
@@ -1724,6 +1589,7 @@ const makeSummary = async function (projectMetaData) {
 };
 
 const makeSchemaSummary = function (schema) {
+	// @ts-ignore
 	const title = ``;
 	const events = schema.filter(x => x.entityType === 'event');
 	const profiles = schema.filter(x => x.entityType === 'profile');
