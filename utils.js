@@ -143,7 +143,7 @@ exports.validateServiceAccount = async function (creds) {
 
 exports.makeProjectFolder = async function (workspace) {
 	//make a folder for the data
-	let folderPath = `./savedProjects/${workspace.projName} (${workspace.projId})`;
+	let folderPath = `./savedProjects/${workspace.projName || `unknown project`} (${workspace.projId || u.rand().toString()})`;
 	try {
 		makeDir(`./savedProjects/`);
 	} catch (err) {
@@ -952,13 +952,10 @@ exports.getProjCount = async function (source, type) {
 		method: 'POST',
 		url: URLs.getInsightsReport(source.project, source?.region),
 		headers: {
-			Accept: 'application/json'
+			Accept: 'application/json',
+			Authorization: source.auth
 
-		},
-		auth: {
-			username: source.acct,
-			password: source.pass
-		},
+		},		
 		data: payload
 	};
 
