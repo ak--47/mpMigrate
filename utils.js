@@ -87,6 +87,8 @@ exports.validateServiceAccount = async function (creds) {
 			suffix: "\nworkspace_ids are NUMBERS from the URL after the project_id\n\tex: /project/<project_id>/view/<workspace_id>\n",
 			validate: isNum
 		}]);
+		workspace.projName = `project ${creds.project}`;
+		workspace.projId = creds.project;
 		return workspace;
 
 
@@ -955,7 +957,7 @@ exports.getProjCount = async function (source, type) {
 			Accept: 'application/json',
 			Authorization: source.auth
 
-		},		
+		},
 		data: payload
 	};
 
