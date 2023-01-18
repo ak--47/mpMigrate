@@ -18,7 +18,7 @@ const track = u.tracker('mp-migrate');
 const inquirer = require('inquirer');
 
 // @ts-ignore
-const types = require('./types')
+const types = require('./types');
 
 // retries on 503: https://stackoverflow.com/a/64076585
 // TODO on 500, just change the report name
@@ -74,8 +74,21 @@ exports.validateServiceAccount = async function (creds) {
 		`pass: access`;
 	} else {
 		`fail: access`;
-		console.error(`user: ${creds.acct || creds.bearer} does not have access to project: ${project}\ndouble check your credentials and try again`);
-		process.exit(1);
+		if (!creds.bearer) {
+			console.error(`user: ${creds.acct || creds.bearer} does not have access to project: ${project}\ndouble check your credentials and try again`);
+			process.exit(1);
+		}
+		log(`user: ${creds.acct || creds.bearer} does not have access to project: ${project} ... if you would like to attempt to use your staff permission to override this setting, you will need to\n\t- be connected to VPN\n\t- tell me the WORKSPACE_ID of project ${project}`);
+		const ask = inquirer.createPromptModule();
+		const workspace = await ask([{
+			type: "input",
+			message: `what is the workspace_id for project ${project}`,
+			name: "id",
+			suffix: "\nworkspace_ids are NUMBERS from the URL after the project_id\n\tex: /project/<project_id>/view/<workspace_id>",
+			validate: isNum
+		}]);
+		return workspace.id
+
 
 	}
 
@@ -194,8 +207,8 @@ exports.continuePrompt = async function () {
 	}
 
 	else {
-		log(`continuing...`)
-		return true
+		log(`continuing...`);
+		return true;
 	}
 };
 
@@ -215,9 +228,9 @@ exports.getCohorts = async function (creds) {
 		debugger;
 		console.error(`ERROR GETTING COHORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		return await exports.continuePrompt
+		return await exports.continuePrompt;
 
-	// @ts-ignore
+		// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -232,8 +245,8 @@ exports.getAllDash = async function (creds) {
 		console.error(`ERROR GETTING DASH`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		return await exports.continuePrompt
-	// @ts-ignore
+		return await exports.continuePrompt;
+		// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -248,8 +261,8 @@ exports.getDashReports = async function (creds, dashId) {
 		console.error(`ERROR GETTING REPORT`);
 		console.error(`${e.message} : ${e.response.data.error}`);
 		debugger;
-		return await exports.continuePrompt
-	// @ts-ignore
+		return await exports.continuePrompt;
+		// @ts-ignore
 	})).data?.results;
 
 	const dashSummary = {
@@ -273,9 +286,9 @@ exports.getSchema = async function (creds) {
 		debugger;
 		console.error(`ERROR GETTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		return await exports.continuePrompt
+		return await exports.continuePrompt;
 
-	// @ts-ignore
+		// @ts-ignore
 	})).data;
 
 	return res.results;
@@ -308,9 +321,9 @@ exports.getCustomProps = async function (creds) {
 		debugger;
 		console.error(`ERROR GETTING CUSTOM PROPS!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		return await exports.continuePrompt
+		return await exports.continuePrompt;
 
-	// @ts-ignore
+		// @ts-ignore
 	})).data.results;
 
 	return res;
@@ -348,7 +361,7 @@ exports.postSchema = async function (creds, schema) {
 		params;
 		console.error(`ERROR POSTING SCHEMA!`);
 		console.error(`${e.message} : ${e.response.data.error}`);
-		return await exports.continuePrompt
+		return await exports.continuePrompt;
 	});
 
 	// @ts-ignore
@@ -398,7 +411,7 @@ exports.makeCohorts = async function (sourceCreds, targetCreds, cohorts = [], so
 				headers: { Authorization: auth },
 				// @ts-ignore
 				data: { "id": createdCohort.data.results.id, "projectShares": [{ "id": project, "canEdit": true }] }
-			// @ts-ignore
+				// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -454,7 +467,7 @@ exports.makeCustomProps = async function (creds, custProps) {
 				method: 'post',
 				headers: { Authorization: auth },
 				data: { "id": customProp.customPropertyId, "projectShares": [{ "id": project, "canEdit": true }] }
-			// @ts-ignore
+				// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -512,7 +525,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 				method: 'post',
 				headers: { Authorization: auth },
 				data: { "id": customEvent?.id, "projectShares": [{ "id": project, "canEdit": true }] }
-			// @ts-ignore
+				// @ts-ignore
 			}).catch((e) => {
 				debugger;
 			});
@@ -660,7 +673,7 @@ exports.makeDashes = async function (sourceCreds, targetCreds, dashes = [], sour
 			method: `post`,
 			headers: { Authorization: auth },
 			data: {}
-		// @ts-ignore
+			// @ts-ignore
 		}).catch((e) => {
 			debugger;
 		});
@@ -963,7 +976,6 @@ exports.getProjCount = async function (source, type) {
 	} catch (e) {
 		source;
 		type;
-		debugger;
 		console.error('ERROR GETTING COUNTS!');
 		console.error(`${e.message} : ${e.response.data.error}`);
 
@@ -1376,10 +1388,12 @@ const matchCustomEntities = async function (sourceCreds, sourceEntities, targetE
 	let sourceCohortList = [];
 
 	if (sourceCreds) {
-		const { projId, workspace, acct, pass, region } = sourceCreds;
+		const { projId, workspace, auth, region } = sourceCreds;
 		sourceCohortList = (await fetch(URLs.listCohorts(projId, workspace, region), {
 			method: `POST`,
-			auth: { username: acct, password: pass }
+			headers: {
+				Authorization: auth
+			}
 		})).data;
 
 	}
@@ -1528,6 +1542,14 @@ function log(message, data, hasResponse = false) {
 	}
 }
 
+function isNum(input) {
+	if (u.is(Number, Number(input))) {
+		return true
+	}
+	else {
+		return "not a number..."
+	}
+}
 
 /*
 ------------------

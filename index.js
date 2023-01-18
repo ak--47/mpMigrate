@@ -96,8 +96,8 @@ async function main(source, target, opts, isCli = false) {
 	// * .env
 	if (!isCli && (!(source.acct || source.pass) || !source.bearer)) {
 		const { envCredsSource, envCredsTarget } = walkthrough.getEnvCreds();
-		source = envCredsSource;
-		target = envCredsTarget;
+		source = {...source, ...envCredsSource};
+		target = {...target, ...envCredsTarget};
 	}
 
 	// * validate source
@@ -147,14 +147,14 @@ async function main(source, target, opts, isCli = false) {
 	if (shouldCopyEvents || shouldGenerateSummary) {
 		log(`querying project for events since ${source.start} to ${source.end}`, null, true);
 		numEvents = await u.getProjCount(source, `events`);
-		log(`	... 👍 found ${u.comma(numEvents)} events`);
+		log(`	... 👍 found ${u.comma(numEvents || 0)} events`);
 	}
 
 	// get all users
 	if (shouldCopyProfiles || shouldGenerateSummary) {
 		log(`querying project for users`, null, true);
 		numProfiles = await u.getProjCount(source, `profiles`);
-		log(`	... 👍 found ${u.comma(numProfiles)} users`);
+		log(`	... 👍 found ${u.comma(numProfiles || 0)} users`);
 	}
 
 	if (shouldGenerateSummary || shouldCopyEntities) {
@@ -530,10 +530,12 @@ function isNotSet(val) {
 	return val === undefined || val === null;
 }
 
-module.exports = {
-	projectCopy: main,
-	entityDelete: del
-};
+const mpMigrate = module.exports = main;
+mpMigrate.entityDelete = del
+// module.exports = {
+// 	projectCopy: main,
+// 	entityDelete: del
+// };
 
 //this allows the module to function as a standalone script
 if (require.main === module) {
@@ -542,7 +544,10 @@ if (require.main === module) {
 		return main(source, target, options, true);
 	}).then((result) => {
 		debugger;
-		// process.exit(0);
+		if (result.target) {
+			log(`https://mixpanel.com/project/${result.target.project}`)
+		}
+		process.exit(0);
 	});
 
 }

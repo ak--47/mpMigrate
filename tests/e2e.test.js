@@ -6,7 +6,7 @@
 
 require('dotenv').config();
 const { execSync } = require("child_process");
-const { projectCopy } = require('../index.js');
+const mpMigrate = require('../index.js');
 const u = require('ak-tools');
 const { getEnvCreds } = require('../cli.js');
 
@@ -39,7 +39,7 @@ describe('module', () => {
 	jest.setTimeout(600000)
 	test('can run as module', async () => {		
 		const {envCredsSource, envCredsTarget} = getEnvCreds()
-		const result = await projectCopy(envCredsSource, envCredsTarget, options);
+		const result = await mpMigrate(envCredsSource, envCredsTarget, options);
 		const {sourceCohorts, sourceDashes, sourceSchema, targetCohorts, targetCustEvents, targetCustProps, targetDashes, targetSchema, targetReports} = result
 		expect(sourceCohorts.length).toBe(2)
 		expect(targetCohorts.length).toBe(2)
@@ -60,9 +60,10 @@ describe('module', () => {
 
 describe('dashes', () => {
 	jest.setTimeout(600000)
-	test('properly runs a dash id', async () => {		
+	test('properly copies a single dash', async () => {		
 		const {envCredsSource, envCredsTarget} = getEnvCreds()
-		const result = await projectCopy(envCredsSource, envCredsTarget, {...options, dash_id: [3657621]});
+		envCredsSource.dash_id = [3657621]
+		const result = await mpMigrate(envCredsSource, envCredsTarget, options);
 		const {sourceCohorts, sourceDashes, sourceSchema, targetCohorts, targetCustEvents, targetCustProps, targetDashes, targetSchema, targetReports} = result
 		expect(sourceCohorts.length).toBe(0)
 		expect(targetCohorts.length).toBe(0)
@@ -72,7 +73,7 @@ describe('dashes', () => {
 		
 		expect(sourceSchema.length).toBe(1)
 		expect(targetSchema.added).toBe(1)		
-		expect(targetCustEvents.length).toBe(0)
+		expect(targetCustEvents).toBe(undefined)
 		
 		expect(targetCustProps.length).toBe(1)
 
@@ -81,16 +82,11 @@ describe('dashes', () => {
 	});
 });
 
-// describe('cli', () => {
-// 	// test('events', async () => {
-// 	// 	const output = execSync(`node ./index.js ${events} --fixData`).toString().trim().split('\n').pop();
-// 	// 	const result = await u.load(output, true);
-// 	// 	expect(result.success).toBe(5003);
-// 	// });
-
-// });
 
 afterAll(() => {
+	// console.log('TEST FINISHED deleting entities...');
+	// execSync(`npm run delete`);
+	// console.log('...entities deleted 👍');
 	console.log('clearing logs...');
 	execSync(`npm run prune`);
 	console.log('...logs cleared 👍');

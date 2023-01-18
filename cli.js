@@ -38,7 +38,7 @@ exports.cli = async function () {
 
 	//credentials
 	else {
-		console.log(`\t👎 didn't find .env file... so...\n`);
+		console.log(`\t👎 didn't find a complete .env file... so...\n`);
 		const howAuth = await ask(authQuestions());
 		console.log('\n');
 		if (howAuth.auth === "service") {
@@ -204,9 +204,9 @@ exports.getEnvCreds = function () {
 
 	}
 
-	else {
-		envCredsSource.dash_id = [];
-	}
+	// else {
+	// 	envCredsSource.dash_id = [];
+	// }
 
 	return {
 		envCredsSource,
@@ -221,7 +221,7 @@ function notEmpty(str) {
 }
 
 function isValid(p) {
-	if (!(p.acct && p.pass) && p.bearer) {
+	if (!(p.acct && p.pass) && !p.bearer) {
 		return false;
 	}
 

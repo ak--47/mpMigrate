@@ -109,7 +109,7 @@ $ npm i mp-migrate
 then
 
 ```javascript
-const { projectCopy } = require('mp-migrate')
+const mpMigrate = require('mp-migrate')
 ```
 and finally
 
@@ -141,7 +141,7 @@ let target = {
 }
 
 //copy project 12345 to project 67890
-const migrateProjects = await projectCopy(source, target)
+const migrateProjects = await mpMigrate(source, target)
 ```
 
 ### specifying options
@@ -178,7 +178,7 @@ let options = {
 	skipPrompt: false 
 }
 
-const migrateProjects = await projectCopy(source, target, options)
+const migrateProjects = await mpMigrate(source, target, options)
 ```
 
 ### deleting entities <div id="delete"></div>
