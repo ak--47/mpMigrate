@@ -49,8 +49,8 @@ global.dateFormat = dateFormat;
 /**
  * mpMigrate!
  * @example
- * const { projectCopy } = require('mp-migrate')
- * const migration = await projectCopy(source, target, options)
+ * const mpMigrate = require('mp-migrate')
+ * const migration = await mpMigrate(source, target, options)
  * @param {types.Source} source `{acct, pass, bearer, project, region, start, end, dash_id[]}`
  * @param {types.Target} target `{acct, pass, bearer, project, region}`
  * @param {types.Options} opts `{shouldGenerateSummary, shouldCopyEntities, shouldCopyEvents, shouldCopyProfiles, shouldCopySchema, silent, skipPrompt}`
@@ -532,10 +532,6 @@ function isNotSet(val) {
 
 const mpMigrate = module.exports = main;
 mpMigrate.entityDelete = del
-// module.exports = {
-// 	projectCopy: main,
-// 	entityDelete: del
-// };
 
 //this allows the module to function as a standalone script
 if (require.main === module) {

@@ -78,16 +78,16 @@ exports.validateServiceAccount = async function (creds) {
 			console.error(`user: ${creds.acct || creds.bearer} does not have access to project: ${project}\ndouble check your credentials and try again`);
 			process.exit(1);
 		}
-		log(`user: ${creds.acct || creds.bearer} does not have access to project: ${project} ... if you would like to attempt to use your staff permission to override this setting, you will need to\n\t- be connected to VPN\n\t- tell me the WORKSPACE_ID of project ${project}`);
+		log(`WARNING!\n\nuser: ${creds.acct || creds.bearer} does not have access to project: ${project} ...\n\nif you would like to attempt to use your staff permission to override this setting, you will need to\n\n\t- be connected to VPN\n\t- tell me the WORKSPACE_ID of project ${project}`);
 		const ask = inquirer.createPromptModule();
 		const workspace = await ask([{
 			type: "input",
 			message: `what is the workspace_id for project ${project}`,
 			name: "id",
-			suffix: "\nworkspace_ids are NUMBERS from the URL after the project_id\n\tex: /project/<project_id>/view/<workspace_id>",
+			suffix: "\nworkspace_ids are NUMBERS from the URL after the project_id\n\tex: /project/<project_id>/view/<workspace_id>\n",
 			validate: isNum
 		}]);
-		return workspace.id
+		return workspace;
 
 
 	}
@@ -1544,10 +1544,10 @@ function log(message, data, hasResponse = false) {
 
 function isNum(input) {
 	if (u.is(Number, Number(input))) {
-		return true
+		return true;
 	}
 	else {
-		return "not a number..."
+		return "not a number...";
 	}
 }
 
