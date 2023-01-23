@@ -7,6 +7,8 @@
 // 
 
 
+// TODO: need to replace profile token
+
 /*
 ----
 ! MODULES
@@ -120,8 +122,9 @@ async function main(source, target, opts, isCli = false) {
 			log(`	please read the instructions and try again:\n\thttps://github.com/ak--47/mpMigrate#tldr`);
 			process.exit(0);
 		}
+		buildAuth(target);
 	}
-	buildAuth(target);
+
 	time('migrate', 'start');
 	track('start', { runId, ...opts });
 
@@ -333,7 +336,7 @@ from project: ${source.project} to project: ${target.project}
 		try {
 			sourceExportEvents = await u.exportAllEvents(source);
 			targetImportEvents = await u.sendEvents(source, target, transformEventsFunc);
-			log(`sent ${u.comma(targetImportEvents.success)} events in ${u.comma(targetImportEvents.batches)} requests; writing log file...`);
+			log(`sent ${u.comma(targetImportEvents.success)} events in ${u.comma(targetImportEvents.requests)} requests; writing log file...`);
 			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents, null, 2));
 		} catch (e) {
 			track('error', { type: "events", runId, ...opts });
