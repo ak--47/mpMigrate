@@ -1,6 +1,6 @@
 {
   "name": "mp-migrate",
-  "version": "1.1.2",
+  "version": "1.1.21",
   "description": "migrate mixpanel reports from one project to another",
   "main": "index.js",
   "keywords": [
@@ -33,7 +33,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/underscore": "^1.11.4",
-    "ak-tools": "^1.0.214",
+    "ak-tools": "^1.0.218",
     "axios": "^0.27.2",
     "axios-retry": "^3.3.1",
     "dayjs": "^1.11.4",
