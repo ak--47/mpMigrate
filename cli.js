@@ -378,12 +378,13 @@ function dateQuestions(srcPid) {
 			message: `what is the start date for project ${srcPid}'s event export?`,
 			suffix: "\nYYYY-MM-DD\n",
 			name: "start",
-			validate: notEmpty
+			validate: notEmpty,
+			default: dayjs().subtract(30, 'd').format(dateFormat)
 		},
 		{
 			type: "input",
 			message: `what is the end date for project ${srcPid}'s event export?`,
-			suffix: "YYYY-MM-DD",
+			suffix: "\nYYYY-MM-DD\n",
 			name: "end",
 			default: dayjs().format(dateFormat)
 		},
