@@ -93,6 +93,7 @@ async function main(source, target, opts, isCli = false) {
 		shouldCopySchema: false,
 		silent: false,
 		skipPrompt: false,
+		timeOffset: 0
 	});
 
 	// * .env
@@ -335,7 +336,7 @@ from project: ${source.project} to project: ${target.project}
 		log(`downloading ${u.comma(numEvents)} events...`, null, true);
 		try {
 			sourceExportEvents = await u.exportAllEvents(source);
-			targetImportEvents = await u.sendEvents(source, target, transformEventsFunc);
+			targetImportEvents = await u.sendEvents(source, target, transformEventsFunc, opts.timeOffset);
 			log(`sent ${u.comma(targetImportEvents.success)} events in ${u.comma(targetImportEvents.requests)} requests; writing log file...`);
 			await u.writeFile(`${dataFolder}/eventLog.json`, JSON.stringify(targetImportEvents, null, 2));
 		} catch (e) {

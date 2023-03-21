@@ -40,6 +40,7 @@
  * @property {boolean} shouldCopySchema
  * @property {boolean} silent
  * @property {boolean} skipPrompt
+ * @property {number} [timeOffset=0] - UTC offset which will add/subtract hours to an event's `time` value; can be a positive or negative number; default `0`
  */
 
 /**
@@ -48,6 +49,12 @@
  * @property {Target} envCredsTarget
  */
 
+/**
+ * @typedef {Object} Config a configuration object
+ * @property {Source} source
+ * @property {Target} target
+ * @property {Options} options
+ */
 
 /**
  * @typedef {Object} Summary
