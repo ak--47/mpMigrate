@@ -10,7 +10,6 @@ const path = require('path');
 const dateFormat = `YYYY-MM-DD`;
 // @ts-ignore
 const mpImport = require('mixpanel-import');
-const mpImportTypes = require('./node_modules/mixpanel-import/types.js');
 const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
 // @ts-ignore
