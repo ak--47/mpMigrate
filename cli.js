@@ -1,21 +1,35 @@
 
 const { pick } = require('underscore');
-const { rnKeys: renameKeys, is } = require('ak-tools');
+const { rnKeys: renameKeys, is, touch, load } = require('ak-tools');
 const dayjs = require('dayjs');
 const dateFormat = `YYYY-MM-DD`;
 const types = require('./types.js');
+const path = require('path');
 
 // https://www.npmjs.com/package/inquirer
 const inquirer = require('inquirer');
 
 
 exports.cli = async function () {
+
 	/** @type {types.Source} */
 	let source = {};
 	/** @type {types.Target} */
 	let target = {};
 	/** @type {types.Options} */
 	let options = {};
+
+	const userConfig = await checkForCliConfig(process.argv.slice().pop());
+	if (userConfig) {
+		try {
+			({ source, target, options } = userConfig);
+			return { source, target, options };
+		}
+		catch (e) {
+			console.log('invalid configuration file... quitting!');
+			process.exit();
+		}
+	}
 
 	const ask = inquirer.createPromptModule();
 	console.log(welcome);
@@ -110,6 +124,9 @@ exports.cli = async function () {
 		if (optConfig.shouldCopyEvents) {
 			console.log('\n');
 			const dates = await ask(dateQuestions(source.project));
+			source.start = dayjs(dates.start).format(dateFormat);
+			source.end = dayjs(dates.end).format(dateFormat);
+			options.timeOffset = Number(dates.timeOffset);
 		}
 	}
 
@@ -124,9 +141,17 @@ exports.cli = async function () {
 			shouldCopySchema: false,
 			silent: false,
 			skipPrompt: false,
+			timeOffset: 0
 		};
 	}
 	console.log("\n");
+
+	const shouldSave = await ask(saveConfig());
+	if (shouldSave.saveConfig) {
+		const saved = await touch(`./mpMigrate-${source.project}-to-${target.project}.json`, { source, target, options }, true);
+		console.log(`configuration saved to ${saved}`);
+		console.log("\n");
+	}
 	return {
 		source, target, options
 	};
@@ -241,10 +266,10 @@ function dashCopyValidate(answer) {
 			.filter(a => a)
 			.map(Number);
 		if (parsed.every((dashId) => is(Number, dashId) && !isNaN(dashId))) {
-			return true
+			return true;
 		}
 		else {
-			return "board ids are numbers only"
+			return "board ids are numbers only";
 		}
 	}
 
@@ -261,7 +286,7 @@ function firstQuestions() {
 			type: "list",
 			message: "what are you trying to do?",
 			name: "intent",
-			choices: [				
+			choices: [
 				{ name: "enumerate saved reports", value: "report" },
 				{ name: "copy between projects", value: "copy" },
 				{ name: "something else...", value: false }
@@ -378,16 +403,49 @@ function dateQuestions(srcPid) {
 			message: `what is the start date for project ${srcPid}'s event export?`,
 			suffix: "\nYYYY-MM-DD\n",
 			name: "start",
-			validate: notEmpty
+			validate: notEmpty,
+			default: dayjs().subtract(30, 'd').format(dateFormat)
 		},
 		{
 			type: "input",
 			message: `what is the end date for project ${srcPid}'s event export?`,
-			suffix: "YYYY-MM-DD",
+			suffix: "\nYYYY-MM-DD\n",
 			name: "end",
 			default: dayjs().format(dateFormat)
 		},
+		{
+			type: "input",
+			message: `(if project ${srcPid} was created before Feb 2023): what is the UTC timezone offset for for project ${srcPid}?`,
+			suffix: "\n# of hours\n",
+			name: "timeOffset",
+			default: 0
+		},
 	];
+}
+
+function saveConfig() {
+	return [
+		{
+			type: "confirm",
+			message: `would you like to save your configuration file for re-use?`,
+			name: "saveConfig",
+			default: true
+		},
+	];
+}
+
+
+async function checkForCliConfig(maybeJson) {
+	let file = null;
+
+	try {
+		file = await load(path.resolve(maybeJson), true, 'utf-8', true);
+		return file;
+	}
+
+	catch (e) {
+		return file;
+	}
 }
 
 const hero = String.raw`

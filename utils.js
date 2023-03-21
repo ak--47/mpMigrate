@@ -10,6 +10,7 @@ const path = require('path');
 const dateFormat = `YYYY-MM-DD`;
 // @ts-ignore
 const mpImport = require('mixpanel-import');
+const mpImportTypes = require('./node_modules/mixpanel-import/types.js');
 const { URLSearchParams } = require('url');
 const axiosRetry = require('axios-retry');
 // @ts-ignore
@@ -510,7 +511,7 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			name;
 			console.error(`ERROR MAKING CUST EVENT! ${name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
-			if (!e.response.data.error.includes('already exists')) debugger;
+			if (!e.response.data.error.includes('already exists'))
 			return {};
 		});
 
@@ -989,7 +990,7 @@ https://github.com/ak--47/mixpanel-import#credentials
 ----------
 */
 
-exports.sendEvents = async function (source, target, transform) {
+exports.sendEvents = async function (source, target, transform, timeOffset = 0) {
 	const data = path.resolve(`${source.localPath}/exports/events.ndjson`);
 	const creds = {
 		acct: target.acct,
@@ -998,6 +999,7 @@ exports.sendEvents = async function (source, target, transform) {
 		token: target.token
 	};
 
+	/** @type {mpImportTypes.Options} */
 	const options = {
 		recordType: `event`, //event, user, OR group
 		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
@@ -1005,9 +1007,11 @@ exports.sendEvents = async function (source, target, transform) {
 		recordsPerBatch: 2000, //max # of records in each batch
 		bytesPerBatch: 2 * 1024 * 1024, //max # of bytes in each batch
 		strict: true, //use strict mode?
-		logs: true, //print to stdout?
+		logs: false, //print to stdout?
 		verbose: false,
-		transformFunc: transform
+		transformFunc: transform,
+		timeOffset: timeOffset
+
 	};
 	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);
@@ -1029,8 +1033,9 @@ exports.sendProfiles = async function (source, target, transform) {
 		streamSize: 27, // highWaterMark for streaming chunks (2^27 ~= 134MB)
 		region: `US`, //US or EU
 		recordsPerBatch: 1000, //max # of records in each batch
-		logs: true, //print to stdout?
-		transformFunc: transform
+		logs: false, //print to stdout?
+		transformFunc: transform,
+		verbose: false
 	};
 	// @ts-ignore
 	const importedData = await mpImport(creds, data, options);

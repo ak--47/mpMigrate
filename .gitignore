@@ -3,6 +3,8 @@ scratch.js
 /savedProjects/*
 !/savedProjects/.gitkeep
 .DS_Store
+/environments/*
+!/environments/.gitkeep
 
 # Logs
 logs
