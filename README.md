@@ -30,7 +30,7 @@ this utility can **copy** most saved entities in any mixpanel project including:
  - custom events
  - custom properties
 
-you can authenticate using [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts) or a [bearer token](https://mixpanel.com/oauth/access_token)
+you will authenticate using [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts) or a [bearer token](https://mixpanel.com/oauth/access_token). 
 
 the script will copy JSON payloads from saved entities in a **source project** to and create those as new entities in a **target project**.
 
@@ -53,6 +53,28 @@ currently **not** supported:
  - user invites
  - session/group keys/timezone and other global project settings
  - saved entity permissions (defaults to global access to all users)
+
+## authentication
+
+to use `mp-migrate` you will need to provide authentication details so that it can access your mixpanel project. two methods of authentication are supported:
+
+- [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts)  (created in the Mixpanel UI). 
+- [bearer token](https://mixpanel.com/oauth/access_token) (can be viewed at `https://mixpanel.com/oauth/access_token`)
+
+bearer tokens are JSON of the form:
+
+```javascript
+{"token": "my-temporary-bearer-token"}
+```
+
+your [bearer token](https://mixpanel.com/oauth/access_token) uniquely identifies **your user account** in a particular project ... these values are rotated at a regular interval. when using your [bearer token](https://mixpanel.com/oauth/access_token), only include the _string value_ of the `token` key (`"my-temporary-bearer-token"` in the example above).
+
+when using [service accounts](https://developer.mixpanel.com/reference/authentication#service-accounts), reports that are created will be "created by" the service account. when using [bearer tokens](https://mixpanel.com/oauth/access_token), reports that are created will be "created by" **you**.
+
+**as a best practice:** 
+- if you are copying data **AND** reports... use a [service account](https://developer.mixpanel.com/reference/authentication#service-accounts)
+- if you are _only_ copying reports, use your [bearer token](https://mixpanel.com/oauth/access_token).
+
 
 ## storing credentials
 

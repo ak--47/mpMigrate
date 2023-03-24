@@ -510,8 +510,12 @@ exports.makeCustomEvents = async function (creds, custEvents, sourceCustProps = 
 			name;
 			console.error(`ERROR MAKING CUST EVENT! ${name}`);
 			console.error(`${e.message} : ${e.response.data.error}`);
-			if (!e.response.data.error.includes('already exists'))
+			if (!e.response.data.error.includes('already exists')) {
+				//noop 
+				return {};
+			}
 			return {};
+
 		});
 
 		// @ts-ignore
@@ -721,7 +725,7 @@ DATA EXPORT
 
 exports.exportAllEvents = async function (source) {
 	const startDate = dayjs(source.start).format(dateFormat);
-	const endDate = dayjs().format(dateFormat);
+	const endDate = dayjs(source.end).format(dateFormat);
 	const url = URLs.dataExport(startDate, endDate, source?.region);
 	const file = path.resolve(`${source.localPath}/exports/events.ndjson`);
 	const writer = createWriteStream(file);
