@@ -105,8 +105,8 @@ TARGET_REGION = ''" > .env
 |`SOURCE_PASS`  | --- | the service account secret of your SOURCE project |
 |`SOURCE_BEARER`  | --- | the bearer token (if applicable) for your SOURCE project |
 |`SOURCE_PROJECT`  | --- | the SOURCE's `project_id` |
-|`SOURCE_DATE_START`  | TODAY | optional: if copying events - when to start `MM-DD-YYYY` |
-|`SOURCE_DATE_END`  | TODAY | optional: if copying events - when to end `MM-DD-YYYY` |
+|`SOURCE_DATE_START`  | TODAY | optional: if copying events - when to start `YYYY-MM-DD` (date is inclusive) |
+|`SOURCE_DATE_END`  | TODAY | optional: if copying events - when to end `YYYY-MM-DD` (date is inclusive) |
 |`SOURCE_REGION`  | `'US'` |  `US` or `EU` |
 |`SOURCE_DASH_ID`  | --- | optional: a `dashboard_id` (or comma sep list of `dashboard_id`s) for coping a subset of dashboards |
 |`TARGET_ACCT`  | --- | the service account of your TARGET project |
@@ -148,8 +148,8 @@ let source = {
 
 	//optional
 	dash_id: ['12345', '67890'] //list of dashboards to copy
-	start: "04-20-2022", //date of first event	
-	end: "04-201-2022" //date of last event
+	start: "2022-04-20", //date of first event	
+	end: "2022-04-21" //date of last event
 }
 let target = {
 	// choose service acct + pass or bearer
