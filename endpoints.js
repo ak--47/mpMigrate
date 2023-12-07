@@ -182,5 +182,6 @@ exports.blacklistKeys = [
     "referencedDirectlyBy",
     "referencedRawEventProperties",
     "project",
-	"is_shared_with_project"
+	"is_shared_with_project",
+	"template_type"
 ];
