@@ -1,5 +1,13 @@
 # mpMigrate
 
+NOTE: this package is now **deprecated**; 
+
+- If you are looking to **copy boards or reports between projects**, see Mixpanel's new **MOVE** feature: https://docs.mixpanel.com/changelogs/2023-07-27-move
+
+- If you are looking to **move data** (events + profiles) from one project to another, see: https://gist.github.com/ak--47/05d73181bf85d4b47317dee9d16aed4d
+
+i will leave this up for posterity, but it is no longer maintained.
+
 ## wat.
 
 `mpMigrate` is a command-line ETL script in Node.js that provides one-time mixpanel **project migrations**. [watch the demo](#demo) to see it in action.
